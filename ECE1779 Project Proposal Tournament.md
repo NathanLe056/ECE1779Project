@@ -118,7 +118,7 @@ March 15<sup>th</sup> - March 21<sup>st</sup>
 
 The remaining days before the presentation is due will be to wrap up any extra implementation work and prepare for the presentation.
 
-Initial Independent Reasoning
+**Initial Independent Reasoning**
 
 First, Fly.io was chosen as it is a PaaS that offers simplicity for deploying Dockerized web applications and for leveraging its edge computing features. Next, Kubernetes will be integrated to manage our containerized applications since it provides superior automation that can handle more complexities beyond simple, single-host setups. Even though the product may assume a simple setup, the skills obtained from designing with this tool will become universal for the long-term. Furthermore, for persistent storage, PostgreSQL will be used as it is easily deployed in Docker as a good relational database that is stored in a Fly.io volume.
 
@@ -126,6 +126,6 @@ It is expected to face numerous challenges throughout the development cycle of t
 
 The initial plan is to work in sprints with the "divide-and-conquer" strategy. A tentative plan has been laid out that lists goals and features to complete every week, and it is always possible to expand the list later.
 
-AI Assistance Disclosure
+**AI Assistance Disclosure**
 
 In terms of development without AI assistance, the software requirements, basic features, motivation for producing this app, and a basic tentative plan for development have been discussed and planned. However, AI was used to suggest other project ideas to consider along with suggesting advanced features that can be implemented effectively into this tournament bracket tracker idea. For example, when AI was prompted about which advanced features should be implemented, it suggested implementing email notifications when the results of a bracket are updated and CI/CD pipeline with GitHub actions for automated deployments. Consequently, the utility of implementing each advanced feature from the list on the course website was discussed and compared along with the suggestions from AI, and it was determined that it would be most effective to follow the suggestions, since those features provide high utility for both developers and users.
