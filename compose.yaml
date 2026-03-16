@@ -17,6 +17,18 @@ services:
 
     networks:
       - app-network
+
+  frontend:
+    build: ./apps/web
+    ports:
+      - "5173:80"
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+
+    networks:
+      - app-network
   db:
     image: postgres:17
     healthcheck:

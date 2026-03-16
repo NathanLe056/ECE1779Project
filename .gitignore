@@ -40,6 +40,13 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 npm-shrinkwrap.json
 npm-pack.tgz
 
-# next.js build folder
-.next
-.vs
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
