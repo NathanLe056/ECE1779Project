@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: api-container
-        image: nathanle056/bracket-api:v9
+        image: nathanle056/bracket-api:v10
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
