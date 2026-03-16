@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
       - name: api-container
-        image: tournament-api:v1
-        imagePullPolicy: Never # tells K8s to use the local image
+        image: nathanle056/bracket-api:v9
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
         envFrom:

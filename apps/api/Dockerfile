@@ -5,19 +5,17 @@ RUN apk add --no-cache openssl
 WORKDIR /app
 
 COPY package*.json ./
-
-# Install ALL dependencies (including typescript and prisma)
 RUN npm install
 
 COPY . .
 
-# 1. GENERATE the Prisma Client first
-RUN npx prisma generate --schema ./prisma/schema.prisma
+# 1. GENERATE using the new path to the config
+RUN npx prisma generate --config src/prisma.config.ts
 
-# 2. BUILD the TypeScript into JavaScript (creates the /dist folder)
+# 2. BUILD (this will put prisma.config.js into /dist)
 RUN npm run build
 
 EXPOSE 3000
 
-# This command runs migrations and then 'node dist/index.js'
+# This will now use your updated 'start' script from package.json
 CMD ["npm", "run", "start"]
