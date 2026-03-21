@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 
 import authRoutes from "./routes/authRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
+import UserRoutes from "./routes/UserRoutes.js";
 import tournamentRoutes from "./routes/tournamentRoutes.js";
 import matchRoutes from "./routes/matchRoutes.js";
 import tournamentMemberRoutes from "./routes/tournamentMemberRoutes.js";
@@ -19,7 +19,7 @@ app.use(
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
+app.use("/api/users", UserRoutes);
 app.use("/api/tournaments", tournamentRoutes);
 app.use("/api/tournament-members", tournamentMemberRoutes);
 app.use("/api/matches", matchRoutes);
