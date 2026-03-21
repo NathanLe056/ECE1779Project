@@ -1,51 +1,65 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
+import { requireAuth } from "../middleware/authMiddleware.js";
 import {
-  validateMatchId,
+  validateTournamentMemberId,
   validateTournamentId,
-  validatePlayer1,
-  validatePlayer2,
-  validateDifferentPlayers,
-  validateWinner,
-  validateRoundNumber,
-  validateMatchOrder,
-  validateMatchStatus,
-} from "../middleware/matchtable.js";
+  validateUserId,
+  validateRole,
+  validateRanking,
+  validateUniqueTournamentMember,
+  validateTournamentCapacity,
+} from "../middleware/tournamentmembertable.js";
 
 const router = Router();
 
-// CREATE match
+// CREATE tournament member
 router.post(
   "/",
+  requireAuth,
   validateTournamentId,
-  validatePlayer1,
-  validatePlayer2,
-  validateDifferentPlayers,
-  validateWinner,
-  validateRoundNumber,
-  validateMatchOrder,
-  validateMatchStatus,
+  validateUserId,
+  validateRole,
+  validateRanking,
+  validateUniqueTournamentMember,
+  validateTournamentCapacity,
   async (req, res) => {
     try {
-      const {
-        tournament_id,
-        player1_id,
-        player2_id,
-        winner_id,
-        round_number,
-        match_order,
-        match_status,
-      } = req.body;
+      const { tournament_id, user_id, role, ranking } = req.body;
 
-      const match = await prisma.match.create({
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const tournament = await prisma.tournament.findUnique({
+        where: { id: tournament_id },
+      });
+
+      if (!tournament) {
+        return res.status(404).json({ message: "Tournament not found" });
+      }
+
+      const isCreator = req.user.id === tournament.created_by;
+      const isSelfJoin = req.user.id === user_id;
+
+      if (!isCreator && !isSelfJoin) {
+        return res.status(403).json({
+          message: "You can only add yourself unless you created the tournament",
+        });
+      }
+
+      if (!isCreator && role !== "player") {
+        return res.status(403).json({
+          message: "You can only join as a player",
+        });
+      }
+
+      const member = await prisma.tournamentMember.create({
         data: {
           tournament_id,
-          player1_id,
-          player2_id,
-          winner_id,
-          round_number,
-          match_order,
-          match_status,
+          user_id,
+          role,
+          ranking,
         },
         include: {
           tournament: {
@@ -55,10 +69,17 @@ router.post(
               status: true,
             },
           },
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+            },
+          },
         },
       });
 
-      return res.status(201).json(match);
+      return res.status(201).json(member);
     } catch (err) {
       console.error(err);
       return res.status(500).json({ message: "Server error" });
@@ -66,10 +87,10 @@ router.post(
   }
 );
 
-// GET all matches
+// GET all tournament members
 router.get("/", async (_req, res) => {
   try {
-    const matches = await prisma.match.findMany({
+    const members = await prisma.tournamentMember.findMany({
       include: {
         tournament: {
           select: {
@@ -78,27 +99,30 @@ router.get("/", async (_req, res) => {
             status: true,
           },
         },
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
       },
-      orderBy: [
-        { tournament_id: "asc" },
-        { round_number: "asc" },
-        { match_order: "asc" },
-      ],
+      orderBy: { id: "desc" },
     });
 
-    return res.json(matches);
+    return res.json(members);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Server error" });
   }
 });
 
-// GET match by id
-router.get("/:id", validateMatchId, async (req, res) => {
+// GET tournament member by id
+router.get("/:id", validateTournamentMemberId, async (req, res) => {
   try {
     const id = Number(req.params.id);
 
-    const match = await prisma.match.findUnique({
+    const member = await prisma.tournamentMember.findUnique({
       where: { id },
       include: {
         tournament: {
@@ -109,188 +133,139 @@ router.get("/:id", validateMatchId, async (req, res) => {
             status: true,
           },
         },
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
       },
     });
 
-    if (!match) {
-      return res.status(404).json({ message: "Match not found" });
+    if (!member) {
+      return res.status(404).json({ message: "Tournament member not found" });
     }
 
-    return res.json(match);
+    return res.json(member);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Server error" });
   }
 });
 
-// UPDATE match
-router.patch("/:id", validateMatchId, async (req, res) => {
+// UPDATE tournament member
+router.patch("/:id", requireAuth, validateTournamentMemberId, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const {
-      player1_id,
-      player2_id,
-      winner_id,
-      round_number,
-      match_order,
-      match_status,
-    } = req.body;
+    const { role, ranking } = req.body;
 
-    if (
-      player1_id === undefined &&
-      player2_id === undefined &&
-      winner_id === undefined &&
-      round_number === undefined &&
-      match_order === undefined &&
-      match_status === undefined
-    ) {
+    if (role === undefined && ranking === undefined) {
       return res.status(400).json({
         message: "Provide at least one field to update",
       });
     }
 
-    const existingMatch = await prisma.match.findUnique({
+    const existingMember = await prisma.tournamentMember.findUnique({
       where: { id },
-    });
-
-    if (!existingMatch) {
-      return res.status(404).json({ message: "Match not found" });
-    }
-
-    const finalPlayer1Id =
-      player1_id !== undefined ? player1_id : existingMatch.player1_id;
-    const finalPlayer2Id =
-      player2_id !== undefined ? player2_id : existingMatch.player2_id;
-    const finalWinnerId =
-      winner_id !== undefined ? winner_id : existingMatch.winner_id;
-    const finalRoundNumber =
-      round_number !== undefined ? round_number : existingMatch.round_number;
-    const finalMatchOrder =
-      match_order !== undefined ? match_order : existingMatch.match_order;
-    const finalMatchStatus =
-      match_status !== undefined ? match_status : existingMatch.match_status;
-
-    if (!Number.isInteger(finalPlayer1Id)) {
-      return res.status(400).json({ message: "player1_id must be an integer" });
-    }
-
-    if (!Number.isInteger(finalPlayer2Id)) {
-      return res.status(400).json({ message: "player2_id must be an integer" });
-    }
-
-    if (finalPlayer1Id === finalPlayer2Id) {
-      return res.status(400).json({
-        message: "player1_id and player2_id cannot be the same",
-      });
-    }
-
-    const player1Member = await prisma.tournamentMember.findFirst({
-      where: {
-        tournament_id: existingMatch.tournament_id,
-        user_id: finalPlayer1Id,
+      include: {
+        tournament: true,
       },
     });
 
-    if (!player1Member) {
-      return res.status(400).json({
-        message: "player1_id must belong to this tournament",
+    if (!existingMember) {
+      return res.status(404).json({ message: "Tournament member not found" });
+    }
+
+    if (!req.user || req.user.id !== existingMember.tournament.created_by) {
+      return res.status(403).json({
+        message: "Only the tournament creator can update members",
       });
     }
 
-    const player2Member = await prisma.tournamentMember.findFirst({
-      where: {
-        tournament_id: existingMatch.tournament_id,
-        user_id: finalPlayer2Id,
-      },
-    });
-
-    if (!player2Member) {
-      return res.status(400).json({
-        message: "player2_id must belong to this tournament",
-      });
-    }
-
-    if (finalWinnerId !== null && finalWinnerId !== undefined) {
-      if (!Number.isInteger(finalWinnerId)) {
+    if (role !== undefined) {
+      if (typeof role !== "string") {
         return res.status(400).json({
-          message: "winner_id must be an integer or null",
+          message: "role must be a string",
         });
       }
 
-      if (finalWinnerId !== finalPlayer1Id && finalWinnerId !== finalPlayer2Id) {
+      if (role !== "admin" && role !== "player") {
         return res.status(400).json({
-          message: "winner_id must be either player1_id, player2_id, or null",
+          message: 'role must be either "admin" or "player"',
         });
       }
     }
 
-    if (!Number.isInteger(finalRoundNumber) || finalRoundNumber <= 0) {
-      return res.status(400).json({
-        message: "round_number must be a positive integer",
-      });
+    if (ranking !== undefined) {
+      if (!Number.isInteger(ranking)) {
+        return res.status(400).json({
+          message: "ranking must be an integer",
+        });
+      }
     }
 
-    if (!Number.isInteger(finalMatchOrder) || finalMatchOrder <= 0) {
-      return res.status(400).json({
-        message: "match_order must be a positive integer",
-      });
-    }
-
-    if (typeof finalMatchStatus !== "string") {
-      return res.status(400).json({
-        message: "match_status must be a string",
-      });
-    }
-
-    if (finalMatchStatus !== "pending" && finalMatchStatus !== "completed") {
-      return res.status(400).json({
-        message: 'match_status must be either "pending" or "completed"',
-      });
-    }
-
-    const updatedMatch = await prisma.match.update({
+    const updatedMember = await prisma.tournamentMember.update({
       where: { id },
       data: {
-        ...(player1_id !== undefined && { player1_id }),
-        ...(player2_id !== undefined && { player2_id }),
-        ...(winner_id !== undefined && { winner_id }),
-        ...(round_number !== undefined && { round_number }),
-        ...(match_order !== undefined && { match_order }),
-        ...(match_status !== undefined && { match_status }),
+        ...(role !== undefined && { role }),
+        ...(ranking !== undefined && { ranking }),
       },
       include: {
         tournament: {
           select: {
             id: true,
             name: true,
-            status: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
           },
         },
       },
     });
 
-    return res.json(updatedMatch);
+    return res.json(updatedMember);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Server error" });
   }
 });
 
-// DELETE match
-router.delete("/:id", validateMatchId, async (req, res) => {
+// DELETE tournament member
+router.delete("/:id", requireAuth, validateTournamentMemberId, async (req, res) => {
   try {
     const id = Number(req.params.id);
 
-    await prisma.match.delete({
+    const existingMember = await prisma.tournamentMember.findUnique({
+      where: { id },
+      include: {
+        tournament: true,
+      },
+    });
+
+    if (!existingMember) {
+      return res.status(404).json({ message: "Tournament member not found" });
+    }
+
+    const isCreator = req.user?.id === existingMember.tournament.created_by;
+    const isSelf = req.user?.id === existingMember.user_id;
+
+    if (!isCreator && !isSelf) {
+      return res.status(403).json({
+        message: "Only the creator or the member can remove this membership",
+      });
+    }
+
+    await prisma.tournamentMember.delete({
       where: { id },
     });
 
     return res.status(204).send();
-  } catch (err: any) {
-    if (err?.code === "P2025") {
-      return res.status(404).json({ message: "Match not found" });
-    }
-
+  } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Server error" });
   }
