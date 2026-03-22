@@ -15,7 +15,7 @@ RUN npm install
 COPY . .
 
 # 1. GENERATE using the new path to the config
-RUN npx prisma generate --config src/prisma.config.ts
+RUN npx prisma generate --schema ./prisma/schema.prisma
 
 # 2. BUILD
 RUN npm run build
