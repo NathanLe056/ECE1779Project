@@ -2,6 +2,7 @@ FROM node:20-alpine
 
 RUN apk add --no-cache openssl
 
+FROM node:22-alpine
 WORKDIR /app
 
 COPY package*.json ./

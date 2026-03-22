@@ -197,4 +197,35 @@ router.delete("/:id", validateUserId, async (req, res) => {
   }
 });
 
+// LOGIN user
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    console.log(user);
+    console.log(password);
+
+    if (!user || user.password_hash !== password) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    return res.json({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 export default router;
