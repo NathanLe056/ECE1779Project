@@ -6,13 +6,40 @@ interface TournamentTableProps {
 }
 
 function TournamentTable({ tournament }: TournamentTableProps) {
-  return (
-    <div>
-      <h2 className="mb-4">Tournament Details</h2>
+  const bracketLayout = [
+    "Quarterfinals",
+    "---------------------------------",
+    "Match 1: P1  --------\\",
+    "                     |-- SF1",
+    "Match 2: BYE --------/",
+    "",
+    "Match 3: P4  --------\\",
+    "                     |-- SF1",
+    "Match 4: P5  --------/",
+    "",
+    "Match 5: P3  --------\\",
+    "                     |-- SF2",
+    "Match 6: P6  --------/",
+    "",
+    "Match 7: P2  --------\\",
+    "                     |-- SF2",
+    "Match 8: BYE --------/",
+    "",
+    "Semifinals",
+    "---------------------------------",
+    "SF1: Winner(M1/M2) vs Winner(M3/M4)",
+    "",
+    "SF2: Winner(M5/M6) vs Winner(M7/M8)",
+    "",
+    "Final",
+    "---------------------------------",
+    "Winner SF1 vs Winner SF2",
+  ].join("\n");
 
-      <div className="card mb-4">
-        <div className="card-body">
-          <table className="table table-striped">
+  return (
+    <div className="tournament-details-wrap">
+      <div className="details-block">
+        <table className="details-table">
             <tbody>
               <tr>
                 <th>ID:</th>
@@ -45,13 +72,19 @@ function TournamentTable({ tournament }: TournamentTableProps) {
                 </td>
               </tr>
             </tbody>
-          </table>
-        </div>
+        </table>
       </div>
 
-      <h3>Members</h3>
-      <div className="table-responsive">
-        <table className="table table-striped">
+      <div className="bracket-preview-wrap">
+        <h3 className="details-subtitle">
+          BADMINTON TOURNAMENT BRACKET (6 players - 8-slot bracket)
+        </h3>
+        <pre className="bracket-preview">{bracketLayout}</pre>
+      </div>
+
+      <h3 className="details-subtitle">Members</h3>
+      <div className="details-scroll">
+        <table className="details-grid-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -75,9 +108,9 @@ function TournamentTable({ tournament }: TournamentTableProps) {
         </table>
       </div>
 
-      <h3>Matches</h3>
-      <div className="table-responsive">
-        <table className="table table-striped">
+      <h3 className="details-subtitle">Matches</h3>
+      <div className="details-scroll">
+        <table className="details-grid-table">
           <thead>
             <tr>
               <th>ID</th>

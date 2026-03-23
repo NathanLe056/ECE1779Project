@@ -35,3 +35,29 @@ export interface TournamentWithDetails {
     created_at: string;
   }>;
 }
+
+export interface TournamentSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  created_by: number;
+  bracket_size: number;
+  status: string;
+  created_at: string;
+  creator: {
+    id: number;
+    username: string;
+    email: string;
+  };
+  _count?: {
+    members: number;
+    matches: number;
+  };
+}
+
+export interface CreateTournamentPayload {
+  name: string;
+  description: string;
+  bracket_size: number;
+  status: "active" | "inactive";
+}
