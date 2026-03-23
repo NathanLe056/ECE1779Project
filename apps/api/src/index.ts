@@ -21,6 +21,14 @@ app.use("/api/matches", matchRoutes);
 
 const PORT = Number(process.env.PORT) || 3000;
 
-app.listen(PORT, () => {
-  console.log(`API running on http://localhost:${PORT}`);
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "Tournament Tracker API is LIVE in Toronto!",
+    status: "Healthy",
+    time: new Date().toISOString()
+  });
+});
+
+app.listen(PORT, "0.0.0.0", () => { //because flyio needs to listen to not only self
+  console.log(`API running on port ${PORT}`);
 });
