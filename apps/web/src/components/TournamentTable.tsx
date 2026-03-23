@@ -9,6 +9,7 @@ function TournamentTable({ tournament }: TournamentTableProps) {
   return (
     <div>
       <h2 className="mb-4">Tournament Details</h2>
+
       <div className="card mb-4">
         <div className="card-body">
           <table className="table table-striped">

@@ -18,16 +18,18 @@ function Login({ onLogin }: LoginProps) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
     try {
-      let user: User;
-      if (isSignUp) {
-        user = await signUp(username, email, password);
-      } else {
-        user = await login(email, password);
-      }
-      onLogin(user);
+      const response = isSignUp
+        ? await signUp(username, email, password)
+        : await login(email, password);
+
+      localStorage.setItem("token", response.token);
+      localStorage.setItem("user", JSON.stringify(response.user));
+
+      onLogin(response.user);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Authentication failed");
     } finally {
       setLoading(false);
     }
@@ -36,21 +38,25 @@ function Login({ onLogin }: LoginProps) {
   const toggleMode = () => {
     setIsSignUp(!isSignUp);
     setError(null);
+    setUsername("");
+    setEmail("");
+    setPassword("");
   };
 
   return (
     <div className="container-fluid mt-5">
       <div className="row justify-content-center">
         <div className="col-12 col-md-10 col-lg-8">
-          <div className="card">
+          <div className="card shadow-sm">
             <div className="card-body">
-              <h1 className="card-title text-center">
+              <h1 className="card-title text-center mb-4">
                 {isSignUp ? "Sign Up" : "Login"}
               </h1>
+
               <form onSubmit={handleSubmit}>
                 {isSignUp && (
                   <div className="mb-3">
-                    <label className="form-label">Username:</label>
+                    <label className="form-label">Username</label>
                     <input
                       type="text"
                       className="form-control"
@@ -60,8 +66,9 @@ function Login({ onLogin }: LoginProps) {
                     />
                   </div>
                 )}
+
                 <div className="mb-3">
-                  <label className="form-label">Email:</label>
+                  <label className="form-label">Email</label>
                   <input
                     type="email"
                     className="form-control"
@@ -70,8 +77,9 @@ function Login({ onLogin }: LoginProps) {
                     required
                   />
                 </div>
+
                 <div className="mb-3">
-                  <label className="form-label">Password:</label>
+                  <label className="form-label">Password</label>
                   <input
                     type="password"
                     className="form-control"
@@ -80,6 +88,7 @@ function Login({ onLogin }: LoginProps) {
                     required
                   />
                 </div>
+
                 <button
                   type="submit"
                   className="btn btn-primary w-100"
@@ -90,15 +99,21 @@ function Login({ onLogin }: LoginProps) {
                       ? "Signing up..."
                       : "Logging in..."
                     : isSignUp
-                      ? "Sign Up"
-                      : "Login"}
+                    ? "Sign Up"
+                    : "Login"}
                 </button>
               </form>
-              <button className="btn btn-link w-100 mt-2" onClick={toggleMode}>
+
+              <button
+                type="button"
+                className="btn btn-link w-100 mt-2"
+                onClick={toggleMode}
+              >
                 {isSignUp
                   ? "Already have an account? Login"
                   : "Don't have an account? Sign Up"}
               </button>
+
               {error && <div className="alert alert-danger mt-3">{error}</div>}
             </div>
           </div>
