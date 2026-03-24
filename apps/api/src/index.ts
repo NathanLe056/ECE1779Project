@@ -8,8 +8,12 @@ import tournamentMemberRoutes from "./routes/tournamentMemberRoutes.js";
 const app = express();
 
 app.use(cors({
-  origin: "http://localhost:5173"
-}));
+  origin: [
+    "http://localhost:5173", 
+    "https://ece1779-frontend.fly.dev"
+  ],
+  credentials: true
+})); //added frontend flyio url so it can accept data from frontend
 
 app.use(express.json());
 
