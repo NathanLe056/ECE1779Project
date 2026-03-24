@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  template:
+    metadata:
+      annotations:
+        # Nginx Ingress: enable session affinity so a browser that opens
+        # an HTTP request and a WebSocket upgrade lands on the same pod.
+        # This is a belt-and-suspenders measure — the Redis adapter means
+        # any pod can serve any client, but sticky sessions reduce
+        # unnecessary Redis fan-out.
+        nginx.ingress.kubernetes.io/affinity: "cookie"
+        nginx.ingress.kubernetes.io/session-cookie-name: "BRACKET_AFFINITY"
+        nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    spec:
+      containers:
+        - name: api
+          env:
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+
+---
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Ingress patch — enable WebSocket proxying.
+#
+# Nginx Ingress requires these two annotations to correctly proxy
+# Upgrade / Connection headers for WebSocket connections.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress   # change to match your existing Ingress name
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "Upgrade";
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 3000

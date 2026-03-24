@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { TournamentWithDetails } from "../types/Tournament";
+import { useTournamentSocket } from "../websocket";  
 
 interface TournamentTableProps {
   tournament: TournamentWithDetails;
