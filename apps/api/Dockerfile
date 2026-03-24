@@ -19,6 +19,8 @@ RUN npx prisma generate --schema ./prisma/schema.prisma
 
 # 2. BUILD
 RUN npm run build
+# ARG DATABASE_URL
+# RUN npx prisma generate
 
 EXPOSE 3000
 
