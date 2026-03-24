@@ -421,6 +421,30 @@ body {
   color: #223547;
 }
 
+.small-delete-btn {
+  background: var(--danger);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.7rem;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 4px 8px rgba(214, 69, 69, 0.2);
+}
+
+.small-delete-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.small-delete-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
   .top-nav {
     margin-top: 0.75rem;

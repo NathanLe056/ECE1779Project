@@ -8,6 +8,7 @@ import {
   validateBracketSize,
   validateTournamentId,
 } from "../middleware/tournamenttable.js";
+import { generateBracketMatches } from "../utils/bracketGenerator.js";
 
 const router = Router();
 
@@ -88,7 +89,7 @@ router.get("/:id", validateTournamentId, async (req, res) => {
   try {
     const id = Number(req.params.id);
 
-    const tournament = await prisma.tournament.findUnique({
+    let tournament = await prisma.tournament.findUnique({
       where: { id },
       include: {
         creator: {
@@ -115,6 +116,38 @@ router.get("/:id", validateTournamentId, async (req, res) => {
 
     if (!tournament) {
       return res.status(404).json({ message: "Tournament not found" });
+    }
+
+    if (tournament.members.length === 6 && tournament.matches.length === 0) {
+      try {
+        await generateBracketMatches(id);
+        tournament = await prisma.tournament.findUnique({
+          where: { id },
+          include: {
+            creator: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+              },
+            },
+            members: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+            matches: true,
+          },
+        });
+      } catch (error) {
+        console.error("Failed to auto-generate bracket matches:", error);
+      }
     }
 
     return res.json(tournament);
@@ -180,19 +213,10 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
     }
 
     if (bracket_size !== undefined) {
-      if (!Number.isInteger(bracket_size)) {
+      if (!Number.isInteger(bracket_size) || bracket_size <= 0) {
         return res
           .status(400)
-          .json({ message: "bracket_size must be an integer" });
-      }
-
-      if (bracket_size !== 6) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "bracket_size must be exactly 6 for the 6-player bracket format",
-          });
+          .json({ message: "bracket_size must be a positive integer" });
       }
     }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getTournament, getTournaments } from "./api/tournamentApi";
+import { getTournament, getTournaments, deleteTournament } from "./api/tournamentApi";
 import { joinTournament } from "./api/tournamentMemberApi";
 import { getCurrentUser } from "./api/userApi";
 import Login from "./components/Login";
@@ -22,6 +22,8 @@ function App() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
   const [joinRanking, setJoinRanking] = useState<string>("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [searchName, setSearchName] = useState("");
   const [selectedTournament, setSelectedTournament] =
     useState<TournamentWithDetails | null>(null);
@@ -165,6 +167,38 @@ function App() {
     }
   };
 
+  const handleTournamentDeleted = () => {
+    setTournaments((prev) =>
+      prev.filter((t) => t.id !== selectedTournament?.id)
+    );
+    setSelectedTournament(null);
+    setJoinMessage(null);
+    setDetailsError(null);
+    setSearchName("");
+  };
+
+  const handleDeleteTournament = async () => {
+    if (!selectedTournament) {
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to delete this tournament? This action cannot be undone.")) {
+      return;
+    }
+
+    setDeleteLoading(true);
+    setDeleteError(null);
+
+    try {
+      await deleteTournament(selectedTournament.id);
+      handleTournamentDeleted();
+    } catch (err: any) {
+      setDeleteError(err.message || "Failed to delete tournament");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="container mt-5">
@@ -300,10 +334,21 @@ function App() {
               {!detailsLoading && !detailsError && selectedTournament && (
                 <div className="join-actions-wrap">
                   {isCreatorOfSelectedTournament ? (
-                    <p className="muted-text">
-                      You are the creator of this tournament and have admin access.
-                      Creators are not included in tournament members.
-                    </p>
+                    <>
+                      <p className="muted-text">
+                        You are the creator of this tournament and have admin access.
+                        Creators are not included in tournament members.
+                      </p>
+                      {deleteError && <div className="inline-error">{deleteError}</div>}
+                      <button
+                        className="small-delete-btn"
+                        onClick={handleDeleteTournament}
+                        disabled={deleteLoading}
+                        title="Delete this tournament"
+                      >
+                        {deleteLoading ? "..." : "Delete Tournament"}
+                      </button>
+                    </>
                   ) : isAlreadyMember ? (
                     <p className="muted-text">You already joined this tournament.</p>
                   ) : (
@@ -327,7 +372,9 @@ function App() {
                 </div>
               )}
               {!detailsLoading && !detailsError && selectedTournament && (
-                <TournamentTable tournament={selectedTournament} />
+                <TournamentTable
+                  tournament={selectedTournament}
+                />
               )}
               {!detailsLoading && !detailsError && !selectedTournament && (
                 <p className="muted-text">No tournament selected yet.</p>

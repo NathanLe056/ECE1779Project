@@ -21,3 +21,20 @@ export function createTournament(
     body: JSON.stringify(payload),
   });
 }
+
+export function deleteTournament(id: number): Promise<void> {
+  return apiFetch<void>(`tournaments/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function generateBracket(
+  tournament_id: number
+): Promise<{ success: boolean; message: string; matches: number }> {
+  return apiFetch<{ success: boolean; message: string; matches: number }>(
+    `matches/generate-bracket/${tournament_id}`,
+    {
+      method: "POST",
+    }
+  );
+}
