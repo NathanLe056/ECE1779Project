@@ -8,11 +8,11 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 # Copy dependency files
-COPY apps/api/package.json apps/api/package-lock.json ./
+COPY package.json package-lock.json ./
 RUN npm install
 
 # Copy the rest of your code
-COPY apps/api/ .
+COPY . .
 
 # 1. GENERATE using the new path to the config
 RUN npx prisma generate --schema ./prisma/schema.prisma

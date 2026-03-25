@@ -17,6 +17,12 @@ primary_region = 'yyz'
   min_machines_running = 0
   processes = ['app']
 
+# --- PROMETHEUS METRICS SECTION ---
+# This tells Fly.io to look for your prom-client data
+[metrics]
+  port = 3000
+  path = "/metrics"
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
