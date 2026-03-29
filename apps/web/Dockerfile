@@ -3,10 +3,10 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-COPY apps/web/package.json apps/web/package-lock.json ./
+COPY ./package.json ./package-lock.json ./
 RUN npm install
 
-COPY apps/web/ .
+COPY . .
 
 RUN npm run build
 
