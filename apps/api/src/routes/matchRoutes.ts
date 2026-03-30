@@ -1,272 +1,338 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
-import {
-  validateTournamentMemberId,
-  validateTournamentId,
-  validateUserId,
-  validateRole,
-  validateRanking,
-  validateUniqueTournamentMember,
-  validateTournamentCapacity,
-} from "../middleware/tournamentmembertable.js";
+import { generateBracketMatches } from "../utils/bracketGenerator.js";
 
 const router = Router();
 
-// CREATE tournament member
-router.post(
-  "/",
-  requireAuth,
-  validateTournamentId,
-  validateUserId,
-  validateRole,
-  validateRanking,
-  validateUniqueTournamentMember,
-  validateTournamentCapacity,
-  async (req, res) => {
-    try {
-      const { tournament_id, user_id, role, ranking } = req.body;
+type MatchNode = {
+  id: number;
+  tournament_id: number;
+  player1_id: number;
+  player2_id: number;
+  winner_id: number | null;
+  round_number: number;
+  match_order: number;
+  match_status: string;
+};
 
-      if (!req.user) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
+function getNextMatchSlot(
+  currentMatch: MatchNode,
+  matchByRoundAndOrder: Map<string, MatchNode>
+): { nextMatch: MatchNode; slot: "player1_id" | "player2_id" } | null {
+  if (currentMatch.round_number === 1 && [1, 2].includes(currentMatch.match_order)) {
+    const nextMatch = matchByRoundAndOrder.get(`2-${currentMatch.match_order}`);
+    if (!nextMatch) return null;
+    return { nextMatch, slot: "player2_id" };
+  }
 
-      const tournament = await prisma.tournament.findUnique({
-        where: { id: tournament_id },
-      });
+  if (currentMatch.round_number === 2 && [1, 2].includes(currentMatch.match_order)) {
+    const finalMatch = matchByRoundAndOrder.get("3-1");
+    if (!finalMatch) return null;
+    return {
+      nextMatch: finalMatch,
+      slot: currentMatch.match_order === 1 ? "player1_id" : "player2_id",
+    };
+  }
 
-      if (!tournament) {
-        return res.status(404).json({ message: "Tournament not found" });
-      }
+  return null;
+}
 
-      const isCreator = req.user.id === tournament.created_by;
-      const isSelfJoin = req.user.id === user_id;
+function propagateWinnerChanges(matches: MatchNode[], startMatchId: number) {
+  const matchById = new Map(matches.map((match) => [match.id, match]));
+  const matchByRoundAndOrder = new Map(
+    matches.map((match) => [`${match.round_number}-${match.match_order}`, match])
+  );
 
-      if (!isCreator && !isSelfJoin) {
-        return res.status(403).json({
-          message: "You can only add yourself unless you created the tournament",
+  const updates = new Map<number, Partial<MatchNode>>();
+  const queue: number[] = [startMatchId];
+  const queued = new Set<number>(queue);
+
+  while (queue.length > 0) {
+    const currentMatchId = queue.shift()!;
+    queued.delete(currentMatchId);
+
+    const currentMatch = matchById.get(currentMatchId);
+    if (!currentMatch) continue;
+
+    const nextMatchResult = getNextMatchSlot(currentMatch, matchByRoundAndOrder);
+    if (!nextMatchResult) continue;
+
+    const { nextMatch, slot } = nextMatchResult;
+    const propagatedPlayerId = currentMatch.winner_id ?? -1;
+    const participantChanged = nextMatch[slot] !== propagatedPlayerId;
+
+    if (participantChanged) {
+      nextMatch[slot] = propagatedPlayerId;
+      const existingUpdate = updates.get(nextMatch.id) ?? {};
+      updates.set(nextMatch.id, { ...existingUpdate, [slot]: propagatedPlayerId });
+    }
+
+    const winnerInvalid =
+      nextMatch.winner_id !== null &&
+      nextMatch.winner_id !== nextMatch.player1_id &&
+      nextMatch.winner_id !== nextMatch.player2_id;
+
+    if (participantChanged || winnerInvalid) {
+      const shouldResetWinner = nextMatch.winner_id !== null;
+      const shouldResetStatus = nextMatch.match_status === "completed";
+
+      if (shouldResetWinner || shouldResetStatus) {
+        nextMatch.winner_id = null;
+        if (shouldResetStatus) {
+          nextMatch.match_status = "pending";
+        }
+
+        const existingUpdate = updates.get(nextMatch.id) ?? {};
+        updates.set(nextMatch.id, {
+          ...existingUpdate,
+          ...(shouldResetWinner ? { winner_id: null } : {}),
+          ...(shouldResetStatus ? { match_status: "pending" } : {}),
         });
       }
 
-      if (!isCreator && role !== "player") {
-        return res.status(403).json({
-          message: "You can only join as a player",
-        });
+      if (!queued.has(nextMatch.id)) {
+        queue.push(nextMatch.id);
+        queued.add(nextMatch.id);
       }
-
-      const member = await prisma.tournamentMember.create({
-        data: {
-          tournament_id,
-          user_id,
-          role,
-          ranking,
-        },
-        include: {
-          tournament: {
-            select: {
-              id: true,
-              name: true,
-              status: true,
-            },
-          },
-          user: {
-            select: {
-              id: true,
-              username: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      return res.status(201).json(member);
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Server error" });
     }
   }
-);
 
-// GET all tournament members
-router.get("/", async (_req, res) => {
+  return Array.from(updates.entries()).map(([id, data]) => ({ id, data }));
+}
+
+// Generate bracket matches for a tournament with 6 members
+router.post("/generate-bracket/:tournament_id", requireAuth, async (req, res) => {
   try {
-    const members = await prisma.tournamentMember.findMany({
-      include: {
-        tournament: {
-          select: {
-            id: true,
-            name: true,
-            status: true,
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-          },
-        },
-      },
-      orderBy: { id: "desc" },
+    const tournament_id = Number(req.params.tournament_id);
+
+    if (!Number.isInteger(tournament_id) || tournament_id <= 0) {
+      return res.status(400).json({ message: "Invalid tournament id" });
+    }
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournament_id },
     });
 
-    return res.json(members);
-  } catch (err) {
-    console.error(err);
+    if (!tournament) {
+      return res.status(404).json({ message: "Tournament not found" });
+    }
+
+    if (!req.user || req.user.id !== tournament.created_by) {
+      return res.status(403).json({
+        message: "Only the tournament creator can generate bracket",
+      });
+    }
+
+    const result = await generateBracketMatches(tournament_id);
+    return res.status(201).json(result);
+  } catch (error: any) {
+    console.error("Error generating bracket:", error);
+    return res.status(400).json({
+      message: error.message || "Failed to generate bracket",
+    });
+  }
+});
+
+// GET all matches for a tournament
+router.get("/tournament/:tournament_id", async (req, res) => {
+  try {
+    const tournament_id = Number(req.params.tournament_id);
+
+    if (!Number.isInteger(tournament_id) || tournament_id <= 0) {
+      return res.status(400).json({ message: "Invalid tournament id" });
+    }
+
+    let matches = await prisma.match.findMany({
+      where: { tournament_id },
+      orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+    });
+
+    // Ensure DB rows exist so frontend saves always target persisted matches.
+    if (matches.length === 0) {
+      try {
+        await generateBracketMatches(tournament_id);
+        matches = await prisma.match.findMany({
+          where: { tournament_id },
+          orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+        });
+      } catch (error) {
+        console.error("Auto-generate matches skipped:", error);
+      }
+    }
+
+    return res.json(matches);
+  } catch (error) {
+    console.error(error);
     return res.status(500).json({ message: "Server error" });
   }
 });
 
-// GET tournament member by id
-router.get("/:id", validateTournamentMemberId, async (req, res) => {
+// GET match by id
+router.get("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
 
-    const member = await prisma.tournamentMember.findUnique({
-      where: { id },
-      include: {
-        tournament: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            status: true,
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    if (!member) {
-      return res.status(404).json({ message: "Tournament member not found" });
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid match id" });
     }
 
-    return res.json(member);
-  } catch (err) {
-    console.error(err);
+    const match = await prisma.match.findUnique({ where: { id } });
+
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+
+    return res.json(match);
+  } catch (error) {
+    console.error(error);
     return res.status(500).json({ message: "Server error" });
   }
 });
 
-// UPDATE tournament member
-router.patch("/:id", requireAuth, validateTournamentMemberId, async (req, res) => {
+// UPDATE match and propagate winners to next round when completed
+router.patch("/:id", requireAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { role, ranking } = req.body;
+    const { winner_id, match_status, player1_id, player2_id } = req.body;
 
-    if (role === undefined && ranking === undefined) {
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid match id" });
+    }
+
+    if (
+      winner_id === undefined &&
+      match_status === undefined &&
+      player1_id === undefined &&
+      player2_id === undefined
+    ) {
       return res.status(400).json({
         message: "Provide at least one field to update",
       });
     }
 
-    const existingMember = await prisma.tournamentMember.findUnique({
+    const existingMatch = await prisma.match.findUnique({
       where: { id },
-      include: {
-        tournament: true,
-      },
+      include: { tournament: true },
     });
 
-    if (!existingMember) {
-      return res.status(404).json({ message: "Tournament member not found" });
+    if (!existingMatch) {
+      return res.status(404).json({ message: "Match not found" });
     }
 
-    if (!req.user || req.user.id !== existingMember.tournament.created_by) {
+    if (!req.user || req.user.id !== existingMatch.tournament.created_by) {
       return res.status(403).json({
-        message: "Only the tournament creator can update members",
+        message: "Only the tournament creator can update matches",
       });
     }
 
-    if (role !== undefined) {
-      if (typeof role !== "string") {
+    if (winner_id !== undefined && winner_id !== null && !Number.isInteger(winner_id)) {
+      return res.status(400).json({
+        message: "winner_id must be an integer or null",
+      });
+    }
+
+    if (match_status !== undefined) {
+      if (typeof match_status !== "string") {
         return res.status(400).json({
-          message: "role must be a string",
+          message: "match_status must be a string",
         });
       }
 
-      if (role !== "admin" && role !== "player") {
+      if (
+        !["pending", "completed", "cancelled", "not started", "bypass"].includes(
+          match_status
+        )
+      ) {
         return res.status(400).json({
-          message: 'role must be either "admin" or "player"',
+          message:
+            'match_status must be one of: "pending", "completed", "cancelled", "not started", "bypass"',
         });
       }
     }
 
-    if (ranking !== undefined) {
-      if (!Number.isInteger(ranking)) {
-        return res.status(400).json({
-          message: "ranking must be an integer",
-        });
-      }
+    if (player1_id !== undefined && !Number.isInteger(player1_id)) {
+      return res.status(400).json({ message: "player1_id must be an integer" });
     }
 
-    const updatedMember = await prisma.tournamentMember.update({
+    if (player2_id !== undefined && !Number.isInteger(player2_id)) {
+      return res.status(400).json({ message: "player2_id must be an integer" });
+    }
+
+    const updatedMatch = await prisma.match.update({
       where: { id },
       data: {
-        ...(role !== undefined && { role }),
-        ...(ranking !== undefined && { ranking }),
-      },
-      include: {
-        tournament: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        user: {
-          select: {
-            id: true,
-            username: true,
-            email: true,
-          },
-        },
+        ...(winner_id !== undefined && { winner_id: winner_id === null ? null : winner_id }),
+        ...(match_status !== undefined && { match_status }),
+        ...(player1_id !== undefined && { player1_id }),
+        ...(player2_id !== undefined && { player2_id }),
       },
     });
 
-    return res.json(updatedMember);
-  } catch (err) {
-    console.error(err);
+    const allMatches = (await prisma.match.findMany({
+      where: { tournament_id: updatedMatch.tournament_id },
+      orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+    })) as MatchNode[];
+
+    const propagatedUpdates = propagateWinnerChanges(allMatches, updatedMatch.id);
+
+    if (propagatedUpdates.length > 0) {
+      await prisma.$transaction(
+        propagatedUpdates.map((update) =>
+          prisma.match.update({
+            where: { id: update.id },
+            data: update.data,
+          })
+        )
+      );
+    }
+
+    // Return all tournament matches so client can refresh from one response.
+    const refreshedMatches = await prisma.match.findMany({
+      where: { tournament_id: updatedMatch.tournament_id },
+      orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+    });
+
+    return res.json({
+      message: "Match updated successfully",
+      match: updatedMatch,
+      matches: refreshedMatches,
+    });
+  } catch (error) {
+    console.error(error);
     return res.status(500).json({ message: "Server error" });
   }
 });
 
-// DELETE tournament member
-router.delete("/:id", requireAuth, validateTournamentMemberId, async (req, res) => {
+// DELETE match
+router.delete("/:id", requireAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
 
-    const existingMember = await prisma.tournamentMember.findUnique({
-      where: { id },
-      include: {
-        tournament: true,
-      },
-    });
-
-    if (!existingMember) {
-      return res.status(404).json({ message: "Tournament member not found" });
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid match id" });
     }
 
-    const isCreator = req.user?.id === existingMember.tournament.created_by;
-    const isSelf = req.user?.id === existingMember.user_id;
+    const existingMatch = await prisma.match.findUnique({
+      where: { id },
+      include: { tournament: true },
+    });
 
-    if (!isCreator && !isSelf) {
+    if (!existingMatch) {
+      return res.status(404).json({ message: "Match not found" });
+    }
+
+    if (!req.user || req.user.id !== existingMatch.tournament.created_by) {
       return res.status(403).json({
-        message: "Only the creator or the member can remove this membership",
+        message: "Only the tournament creator can delete matches",
       });
     }
 
-    await prisma.tournamentMember.delete({
-      where: { id },
-    });
+    await prisma.match.delete({ where: { id } });
 
     return res.status(204).send();
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error(error);
     return res.status(500).json({ message: "Server error" });
   }
 });
