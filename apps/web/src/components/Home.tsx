@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getTournaments } from "../api/tournamentApi";
+import { getTournaments, getMyTournaments } from "../api/tournamentApi";
 import { TournamentSummary } from "../types/Tournament";
 import { User } from "../types/User";
 
@@ -16,10 +16,29 @@ function Home({ user, onLogout, tournaments, onTournamentsChange }: HomeProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchName, setSearchName] = useState("");
+  const [myTournaments, setMyTournaments] = useState<TournamentSummary[]>([]);
+  const [myTournamentsLoading, setMyTournamentsLoading] = useState(false);
+  const [myTournamentsError, setMyTournamentsError] = useState<string | null>(
+    null,
+  );
 
   const filteredTournaments = tournaments.filter((t) =>
     t.name.toLowerCase().includes(searchName.trim().toLowerCase()),
   );
+
+  useEffect(() => {
+    if (user) {
+      setMyTournamentsLoading(true);
+      setMyTournamentsError(null);
+      getMyTournaments()
+        .then(setMyTournaments)
+        .catch((err) => {
+          console.error("Failed to fetch my tournaments:", err);
+          setMyTournamentsError("Failed to load your tournaments");
+        })
+        .finally(() => setMyTournamentsLoading(false));
+    }
+  }, [user]);
 
   return (
     <div className="app-shell">
@@ -62,6 +81,47 @@ function Home({ user, onLogout, tournaments, onTournamentsChange }: HomeProps) {
               >
                 Open Create Form
               </button>
+            </div>
+          )}
+
+          {user && (
+            <div className="feature-card my-tournaments-card">
+              <h2 className="section-title">My Tournaments</h2>
+              {myTournamentsLoading && (
+                <div className="status-text">Loading your tournaments...</div>
+              )}
+              {myTournamentsError && (
+                <div className="inline-error">{myTournamentsError}</div>
+              )}
+              {!myTournamentsLoading && !myTournamentsError && (
+                <div className="my-tournaments-list">
+                  {myTournaments.length === 0 ? (
+                    <p className="muted-text">
+                      You haven't joined or created any tournaments yet.
+                    </p>
+                  ) : (
+                    <ul className="name-list">
+                      {myTournaments.map((tournament) => (
+                        <li
+                          key={tournament.id}
+                          className="name-item"
+                          onClick={() =>
+                            navigate(`/tournament/${tournament.id}`)
+                          }
+                        >
+                          <span>{tournament.name}</span>
+                          <span className="name-item-meta">
+                            {tournament.creator.id === user.id
+                              ? "Created"
+                              : "Joined"}{" "}
+                            • #{tournament.id}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
