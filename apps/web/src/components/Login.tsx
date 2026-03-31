@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { login, signUp } from "../api/userApi";
 import { User } from "../types/User";
 
@@ -6,8 +7,8 @@ interface LoginProps {
   onLogin: (user: User) => void;
 }
 
-
 function Login({ onLogin }: LoginProps) {
+  const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -26,6 +27,7 @@ function Login({ onLogin }: LoginProps) {
       localStorage.setItem("token", response.token);
       localStorage.setItem("user", JSON.stringify(response.user));
       onLogin(response.user);
+      navigate("/");
     } catch (err: any) {
       setError(err.message || "Authentication failed");
     } finally {
@@ -80,18 +82,14 @@ function Login({ onLogin }: LoginProps) {
                   required
                 />
               </div>
-              <button
-                type="submit"
-                className="login-btn"
-                disabled={loading}
-              >
+              <button type="submit" className="login-btn" disabled={loading}>
                 {loading
                   ? isSignUp
                     ? "Signing up..."
                     : "Logging in..."
                   : isSignUp
-                  ? "Sign Up"
-                  : "Login"}
+                    ? "Sign Up"
+                    : "Login"}
               </button>
             </form>
             <button
