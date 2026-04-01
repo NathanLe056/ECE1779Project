@@ -1,22 +1,68 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { TournamentWithDetails } from "../types/Tournament";
 import { apiFetch } from "../api/apiClient";
+import { updateMatch } from "../api/matchApi";
 
 interface TournamentTableProps {
   tournament: TournamentWithDetails;
+  currentUserId: number | null;
 }
 
-function TournamentTable({ tournament }: TournamentTableProps) {
+type MatchRow = TournamentWithDetails["matches"][number];
+
+type RowEditState = {
+  match_status: string;
+  winner_id: number | null;
+};
+
+type RowUiState = {
+  saving: boolean;
+  success: string | null;
+  error: string | null;
+};
+
+const MATCH_STATUS_OPTIONS = [
+  "not started",
+  "pending",
+  "completed",
+  "cancelled",
+  "bypass",
+];
+
+function getRoundOrderKey(roundNumber: number, matchOrder: number) {
+  return `${roundNumber}-${matchOrder}`;
+}
+
+function TournamentTable({ tournament, currentUserId }: TournamentTableProps) {
   const [displayMatches, setDisplayMatches] = useState<TournamentWithDetails["matches"]>(
     tournament.matches
   );
+  const [editableRows, setEditableRows] = useState<Record<string, RowEditState>>({});
+  const [rowUiState, setRowUiState] = useState<Record<string, RowUiState>>({});
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [matchesError, setMatchesError] = useState<string | null>(null);
+
+  const canEditMatches =
+    currentUserId !== null &&
+    currentUserId !== undefined &&
+    currentUserId === tournament.created_by;
+
+  const updateRowUiState = (key: string, updates: Partial<RowUiState>) => {
+    setRowUiState((prev) => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] || {}),
+        ...updates,
+      },
+    }));
+  };
 
   useEffect(() => {
     let isMounted = true;
 
     setDisplayMatches(tournament.matches);
+    setEditableRows({});
+    setRowUiState({});
     setMatchesLoading(true);
     setMatchesError(null);
 
@@ -24,6 +70,8 @@ function TournamentTable({ tournament }: TournamentTableProps) {
       .then((fetchedMatches) => {
         if (!isMounted) return;
         setDisplayMatches(fetchedMatches);
+        setEditableRows({});
+        setRowUiState({});
       })
       .catch((error: any) => {
         if (!isMounted) return;
@@ -156,6 +204,76 @@ function TournamentTable({ tournament }: TournamentTableProps) {
 
   const effectiveMatches = displayMatches.length > 0 ? displayMatches : fallbackMatches;
 
+  const getEffectiveRowState = (match: MatchRow): RowEditState => {
+    const key = getRoundOrderKey(match.round_number, match.match_order);
+    const local = editableRows[key];
+    if (local) {
+      return local;
+    }
+
+    return {
+      match_status: match.match_status,
+      winner_id: match.winner_id,
+    };
+  };
+
+  const projectedMatches = useMemo(() => {
+    const clones = effectiveMatches.map((match) => ({ ...match }));
+    const byKey = new Map(
+      clones.map((match) => [getRoundOrderKey(match.round_number, match.match_order), match])
+    );
+
+    for (const match of clones) {
+      const rowState = getEffectiveRowState(match);
+      match.match_status = rowState.match_status;
+      match.winner_id = rowState.winner_id;
+    }
+
+    const propagateWinner = (
+      sourceRound: number,
+      sourceOrder: number,
+      targetRound: number,
+      targetOrder: number,
+      targetSlot: "player1_id" | "player2_id"
+    ) => {
+      const source = byKey.get(getRoundOrderKey(sourceRound, sourceOrder));
+      const target = byKey.get(getRoundOrderKey(targetRound, targetOrder));
+
+      if (!source || !target) {
+        return;
+      }
+
+      const nextParticipant = source.winner_id ?? -1;
+      const participantChanged = target[targetSlot] !== nextParticipant;
+
+      if (participantChanged) {
+        target[targetSlot] = nextParticipant;
+      }
+
+      const winnerInvalid =
+        target.winner_id !== null &&
+        target.winner_id !== target.player1_id &&
+        target.winner_id !== target.player2_id;
+
+      if (participantChanged || winnerInvalid) {
+        if (target.winner_id !== null) {
+          target.winner_id = null;
+        }
+
+        if (["completed", "bypass"].includes(target.match_status)) {
+          target.match_status = "pending";
+        }
+      }
+    };
+
+    propagateWinner(1, 1, 2, 2, "player2_id");
+    propagateWinner(1, 2, 2, 1, "player2_id");
+    propagateWinner(2, 1, 3, 1, "player1_id");
+    propagateWinner(2, 2, 3, 1, "player2_id");
+
+    return clones;
+  }, [effectiveMatches, editableRows]);
+
   const getParticipantLabel = (userId: number | null): string => {
     if (userId === null || userId === undefined) return "N/A";
     if (userId === -1) return "TBD";
@@ -163,15 +281,83 @@ function TournamentTable({ tournament }: TournamentTableProps) {
     return membersByUserId.get(userId) ?? `User ${userId}`;
   };
 
-  const quarterfinalMatches = effectiveMatches.filter(
+  const quarterfinalMatches = projectedMatches.filter(
     (match) => match.round_number === 1
   );
-  const semifinalMatches = effectiveMatches.filter(
+  const semifinalMatches = projectedMatches.filter(
     (match) => match.round_number === 2
   );
-  const finalMatches = effectiveMatches.filter(
+  const finalMatches = projectedMatches.filter(
     (match) => match.round_number === 3
   );
+
+  const finalMatch = finalMatches.find((match) => match.match_order === 1) ?? null;
+  const tournamentWinnerName =
+    finalMatch && finalMatch.winner_id && finalMatch.winner_id > 0
+      ? getParticipantLabel(finalMatch.winner_id)
+      : null;
+  const isTournamentOver =
+    !!finalMatch &&
+    tournamentWinnerName !== null &&
+    ["completed", "bypass"].includes(finalMatch.match_status);
+
+  const setRowEditState = (match: MatchRow, updates: Partial<RowEditState>) => {
+    const key = getRoundOrderKey(match.round_number, match.match_order);
+    const baseState = getEffectiveRowState(match);
+    const nextState = {
+      ...baseState,
+      ...updates,
+    };
+
+    setEditableRows((prev) => ({
+      ...prev,
+      [key]: nextState,
+    }));
+
+    updateRowUiState(key, { success: null, error: null });
+  };
+
+  const handleSaveRow = async (match: MatchRow) => {
+    const key = getRoundOrderKey(match.round_number, match.match_order);
+    const rowState = getEffectiveRowState(match);
+
+    if (rowState.match_status === "completed" && rowState.winner_id === null) {
+      updateRowUiState(key, {
+        saving: false,
+        success: null,
+        error: "Winner is required when match status is completed",
+      });
+      return;
+    }
+
+    updateRowUiState(key, {
+      saving: true,
+      success: null,
+      error: null,
+    });
+
+    try {
+      const response = await updateMatch(match.id, {
+        match_status: rowState.match_status,
+        winner_id: rowState.winner_id,
+      });
+
+      setDisplayMatches(response.matches);
+      setEditableRows({});
+
+      updateRowUiState(key, {
+        saving: false,
+        success: "Saved",
+        error: null,
+      });
+    } catch (error: any) {
+      updateRowUiState(key, {
+        saving: false,
+        success: null,
+        error: error.message || "Failed to save match",
+      });
+    }
+  };
 
   const renderRoundTable = (
     title: string,
@@ -179,7 +365,7 @@ function TournamentTable({ tournament }: TournamentTableProps) {
   ) => (
     <>
       <h3 className="details-subtitle">{title}</h3>
-      <div className="details-scroll">
+      <div className="round-table-card">
         <table className="details-grid-table">
           <thead>
             <tr>
@@ -190,25 +376,105 @@ function TournamentTable({ tournament }: TournamentTableProps) {
               <th>Order</th>
               <th>Status</th>
               <th>Created At</th>
+              {canEditMatches && <th>Admin</th>}
             </tr>
           </thead>
           <tbody>
             {matches.length === 0 ? (
               <tr>
-                <td colSpan={7}>No matches yet for this round.</td>
+                <td colSpan={canEditMatches ? 8 : 7}>No matches yet for this round.</td>
               </tr>
             ) : (
-              matches.map((match) => (
-                <tr key={match.id}>
-                  <td>{match.id}</td>
-                  <td>{getParticipantLabel(match.player1_id)}</td>
-                  <td>{getParticipantLabel(match.player2_id)}</td>
-                  <td>{getParticipantLabel(match.winner_id)}</td>
-                  <td>{match.match_order}</td>
-                  <td>{match.match_status}</td>
-                  <td>{new Date(match.created_at).toLocaleString()}</td>
-                </tr>
-              ))
+              matches.map((match) => {
+                const rowState = getEffectiveRowState(match);
+                const rowKey = getRoundOrderKey(match.round_number, match.match_order);
+                const participantChoices = [match.player1_id, match.player2_id].filter(
+                  (participantId, index, array) =>
+                    participantId > 0 && array.indexOf(participantId) === index
+                );
+                const winnerDisabled = rowState.match_status !== "completed";
+                const rowStateUi = rowUiState[rowKey] || {
+                  saving: false,
+                  success: null,
+                  error: null,
+                };
+
+                return (
+                  <tr key={match.id}>
+                    <td>{match.id}</td>
+                    <td>{getParticipantLabel(match.player1_id)}</td>
+                    <td>{getParticipantLabel(match.player2_id)}</td>
+                    <td>
+                      {canEditMatches ? (
+                        <select
+                          className="match-edit-input"
+                          value={rowState.winner_id ?? ""}
+                          onChange={(e) => {
+                            const nextValue = e.target.value;
+                            setRowEditState(match, {
+                              winner_id: nextValue === "" ? null : Number(nextValue),
+                            });
+                          }}
+                          disabled={winnerDisabled || rowStateUi.saving}
+                        >
+                          <option value="">Select winner</option>
+                          {participantChoices.map((participantId) => (
+                            <option key={participantId} value={participantId}>
+                              {getParticipantLabel(participantId)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        getParticipantLabel(match.winner_id)
+                      )}
+                    </td>
+                    <td>{match.match_order}</td>
+                    <td>
+                      {canEditMatches ? (
+                        <select
+                          className="match-edit-input"
+                          value={rowState.match_status}
+                          onChange={(e) => {
+                            const nextStatus = e.target.value;
+                            setRowEditState(match, {
+                              match_status: nextStatus,
+                              winner_id:
+                                nextStatus === "completed" ? rowState.winner_id : null,
+                            });
+                          }}
+                          disabled={rowStateUi.saving}
+                        >
+                          {MATCH_STATUS_OPTIONS.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        rowState.match_status
+                      )}
+                    </td>
+                    <td>{new Date(match.created_at).toLocaleString()}</td>
+                    {canEditMatches && (
+                      <td>
+                        <button
+                          className="match-save-btn"
+                          onClick={() => handleSaveRow(match)}
+                          disabled={rowStateUi.saving}
+                        >
+                          {rowStateUi.saving ? "Saving..." : "Save"}
+                        </button>
+                        {rowStateUi.success && (
+                          <div className="match-row-feedback success">{rowStateUi.success}</div>
+                        )}
+                        {rowStateUi.error && (
+                          <div className="match-row-feedback error">{rowStateUi.error}</div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -290,10 +556,23 @@ function TournamentTable({ tournament }: TournamentTableProps) {
 
       {matchesLoading && <p className="muted-text">Loading matches...</p>}
       {matchesError && <p className="muted-text">{matchesError}</p>}
+      {!canEditMatches && (
+        <p className="muted-text">
+          Bracket is read-only. Only the tournament creator can update match outcomes.
+        </p>
+      )}
 
       {renderRoundTable("Quarterfinals", quarterfinalMatches)}
       {renderRoundTable("Semifinals", semifinalMatches)}
       {renderRoundTable("Finals", finalMatches)}
+
+      {isTournamentOver && (
+        <div className="tournament-winner-banner" role="status" aria-live="polite">
+          <div className="tournament-winner-label">Tournament Winner</div>
+          <div className="tournament-winner-name">{tournamentWinnerName}</div>
+          <div className="tournament-winner-note">Tournament is over.</div>
+        </div>
+      )}
     </div>
   );
 }

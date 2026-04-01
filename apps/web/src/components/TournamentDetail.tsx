@@ -344,7 +344,10 @@ function TournamentDetail({
             )}
           </div>
 
-          <TournamentTable tournament={tournament} />
+          <TournamentTable
+            tournament={tournament}
+            currentUserId={user?.id ?? null}
+          />
         </div>
       </main>
     </div>
