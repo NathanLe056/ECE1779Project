@@ -26,7 +26,7 @@ register.registerMetric(loginCounter);
 
 app.use(cors({
   origin: [
-    "http://localhost:5173",
+    "http://localhost:5172",
     "https://ece1779-frontend.fly.dev",
     "https://ece1779-testing-frontend.fly.dev"
   ],

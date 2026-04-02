@@ -9,6 +9,9 @@ export async function generateBracketMatches(tournament_id: number) {
       include: { user: true },
     });
 
+    console.log(`Found ${members.length} members for tournament ${tournament_id}`);
+    console.log("Members:", members.map((m) => ({ id: m.id, user_id: m.user_id, username: m.user.username })));
+
     if (members.length !== 6) {
       throw new Error("Tournament must have exactly 6 members to generate bracket");
     }
