@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
 import { generateToken } from "../utils/auth.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
+import { loginCounter } from "../index.js"; // 1. IMPORT THE COUNTER
 
 const router = Router();
 
@@ -98,6 +99,9 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    // 2. TRIGGER THE COUNTER HERE (Success!)
+    loginCounter.inc();
+    
     const token = generateToken({
       userId: user.id,
       email: user.email,

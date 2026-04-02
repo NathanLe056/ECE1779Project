@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  username      String
+  email         String   @unique
+  password_hash String
+  created_at    DateTime @default(now())
+
+  tournaments_created Tournament[]       @relation("TournamentCreator")
+  memberships         TournamentMember[]
+}
+
+model Tournament {
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
+  created_by   Int
+  bracket_size Int
+  status       String   @default("pending")
+  created_at   DateTime @default(now())
+
+  creator User               @relation("TournamentCreator", fields: [created_by], references: [id])
+  members TournamentMember[]
+  matches Match[]
+}
+
+model TournamentMember {
+  id            Int    @id @default(autoincrement())
+  tournament_id Int
+  user_id       Int
+  role          String
+  ranking       Int?
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id])
+  user       User       @relation(fields: [user_id], references: [id])
+}
+
+model Match {
+  id            Int      @id @default(autoincrement())
+  tournament_id Int
+  player1_id    Int
+  player2_id    Int
+  winner_id     Int?
+  round_number  Int
+  match_order   Int
+  match_status  String   @default("pending")
+  created_at    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id])
+}

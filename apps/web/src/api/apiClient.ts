@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:3000/api/";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000/api/"; //first one is for fly.io. also adding .env in web folder to define viteapiurl
 
 export async function apiFetch<T>(
   endpoint: string,
