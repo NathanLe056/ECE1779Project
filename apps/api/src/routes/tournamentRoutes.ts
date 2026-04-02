@@ -84,6 +84,45 @@ router.get("/", async (_req, res) => {
   }
 });
 
+// READ my tournaments
+router.get("/my-tournaments", requireAuth, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const tournaments = await prisma.tournament.findMany({
+      where: {
+        OR: [
+          { created_by: req.user.id },
+          { members: { some: { user_id: req.user.id } } }
+        ]
+      },
+      orderBy: { created_at: "desc" },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
+        _count: {
+          select: {
+            members: true,
+            matches: true,
+          },
+        },
+      },
+    });
+
+    return res.json(tournaments);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 // READ tournament by id
 router.get("/:id", validateTournamentId, async (req, res) => {
   try {

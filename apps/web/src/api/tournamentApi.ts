@@ -13,6 +13,10 @@ export function getTournaments(): Promise<TournamentSummary[]> {
   return apiFetch<TournamentSummary[]>("tournaments");
 }
 
+export function getMyTournaments(): Promise<TournamentSummary[]> {
+  return apiFetch<TournamentSummary[]>("tournaments/my-tournaments");
+}
+
 export function createTournament(
   payload: CreateTournamentPayload
 ): Promise<TournamentSummary> {

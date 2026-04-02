@@ -27,6 +27,10 @@ export async function apiFetch<T>(
     }
     throw new Error(message);
   } else {
-    return response.json();   
+    // Handle responses with no content (204 No Content)
+    if (response.status === 204) {
+      return undefined as T;
+    }
+    return response.json();
   }
 }
