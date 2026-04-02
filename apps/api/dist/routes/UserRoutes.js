@@ -1,33 +1,11 @@
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
-import { validateUsername, validateEmail, validatePassword, validateUserId, } from "../middleware/usertable.js";
+import { requireAuth } from "../middleware/authMiddleware.js";
+import { validateUserId } from "../middleware/usertable.js";
 const router = Router();
-// CREATE user
-router.post("/", validateUsername, validateEmail, validatePassword, async (req, res) => {
-    try {
-        const { username, email, password } = req.body;
-        const user = await prisma.user.create({
-            data: {
-                username,
-                email,
-                password_hash: password,
-            },
-            select: {
-                id: true,
-                username: true,
-                email: true,
-                created_at: true,
-            },
-        });
-        return res.status(201).json(user);
-    }
-    catch (err) {
-        console.error(err);
-        return res.status(500).json({ message: "Server error" });
-    }
-});
 // GET all users
-router.get("/", async (_req, res) => {
+router.get("/", requireAuth, async (_req, res) => {
     try {
         const users = await prisma.user.findMany({
             orderBy: { created_at: "desc" },
@@ -46,7 +24,7 @@ router.get("/", async (_req, res) => {
     }
 });
 // GET user by id
-router.get("/:id", validateUserId, async (req, res) => {
+router.get("/:id", requireAuth, validateUserId, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const user = await prisma.user.findUnique({
@@ -69,9 +47,12 @@ router.get("/:id", validateUserId, async (req, res) => {
     }
 });
 // UPDATE user
-router.patch("/:id", validateUserId, async (req, res) => {
+router.patch("/:id", requireAuth, validateUserId, async (req, res) => {
     try {
         const id = Number(req.params.id);
+        if (!req.user || req.user.id !== id) {
+            return res.status(403).json({ message: "You can only update your own account" });
+        }
         const { username, email, password } = req.body;
         if (username === undefined &&
             email === undefined &&
@@ -110,6 +91,7 @@ router.patch("/:id", validateUserId, async (req, res) => {
                 return res.status(409).json({ message: "Email already exists" });
             }
         }
+        let hashedPassword;
         if (password !== undefined) {
             if (typeof password !== "string") {
                 return res.status(400).json({ message: "Password must be a string" });
@@ -117,13 +99,14 @@ router.patch("/:id", validateUserId, async (req, res) => {
             if (password.trim().length < 1) {
                 return res.status(400).json({ message: "Password is required" });
             }
+            hashedPassword = await bcrypt.hash(password, 10);
         }
         const updatedUser = await prisma.user.update({
             where: { id },
             data: {
                 ...(username !== undefined && { username: username.trim() }),
                 ...(email !== undefined && { email: email.trim() }),
-                ...(password !== undefined && { password_hash: password }),
+                ...(hashedPassword !== undefined && { password_hash: hashedPassword }),
             },
             select: {
                 id: true,
@@ -143,9 +126,12 @@ router.patch("/:id", validateUserId, async (req, res) => {
     }
 });
 // DELETE user
-router.delete("/:id", validateUserId, async (req, res) => {
+router.delete("/:id", requireAuth, validateUserId, async (req, res) => {
     try {
         const id = Number(req.params.id);
+        if (!req.user || req.user.id !== id) {
+            return res.status(403).json({ message: "You can only delete your own account" });
+        }
         await prisma.user.delete({
             where: { id },
         });

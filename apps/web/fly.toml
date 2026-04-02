@@ -1,13 +1,13 @@
-# fly.toml app configuration file generated for ece1779-frontend on 2026-03-24T00:32:08-04:00
+# fly.toml app configuration file generated for ece1779-testing-frontend on 2026-04-01T20:49:13-04:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'ece1779-frontend'
+app = 'ece1779-testing-frontend'
 primary_region = 'yyz'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [http_service]
   internal_port = 80
@@ -18,6 +18,6 @@ primary_region = 'yyz'
   processes = ['app']
 
 [[vm]]
-  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
   memory_mb = 1024

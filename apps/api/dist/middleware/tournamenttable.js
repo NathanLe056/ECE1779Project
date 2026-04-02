@@ -87,9 +87,14 @@ export const validateBracketSize = (req, res, next) => {
             message: "bracket_size is required",
         });
     }
-    if (!Number.isInteger(bracket_size) || bracket_size <= 0) {
+    if (!Number.isInteger(bracket_size)) {
         return res.status(400).json({
-            message: "bracket_size must be a positive integer",
+            message: "bracket_size must be an integer",
+        });
+    }
+    if (bracket_size !== 6) {
+        return res.status(400).json({
+            message: "bracket_size must be exactly 6 for the 6-player bracket format",
         });
     }
     next();

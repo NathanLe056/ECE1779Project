@@ -87,6 +87,22 @@ export const validateRanking = (req, res, next) => {
 };
 export const validateUniqueTournamentMember = async (req, res, next) => {
     const { tournament_id, user_id } = req.body;
+    const tournament = await prisma.tournament.findUnique({
+        where: { id: tournament_id },
+        select: {
+            created_by: true,
+        },
+    });
+    if (!tournament) {
+        return res.status(404).json({
+            message: "Tournament not found",
+        });
+    }
+    if (user_id === tournament.created_by) {
+        return res.status(400).json({
+            message: "Tournament creator has admin access and cannot join as a member",
+        });
+    }
     const existingMembership = await prisma.tournamentMember.findFirst({
         where: {
             tournament_id,

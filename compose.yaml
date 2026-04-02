@@ -32,7 +32,7 @@ services:
       - app-network
   db:
     ports:
-      - "5432:5432"
+      - "5433:5432"          #because we want docker compose on a different port than k8s
     image: postgres:17
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]

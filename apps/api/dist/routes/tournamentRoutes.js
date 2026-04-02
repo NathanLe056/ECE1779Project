@@ -1,16 +1,21 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { validateTournamentName, validateTournamentDescription, validateCreatedBy, validateTournamentStatus, validateBracketSize, validateTournamentId, } from "../middleware/tournamenttable.js";
+import { requireAuth } from "../middleware/authMiddleware.js";
+import { validateTournamentName, validateTournamentDescription, validateTournamentStatus, validateBracketSize, validateTournamentId, } from "../middleware/tournamenttable.js";
+import { generateBracketMatches } from "../utils/bracketGenerator.js";
 const router = Router();
 // CREATE tournament
-router.post("/", validateTournamentName, validateTournamentDescription, validateCreatedBy, validateTournamentStatus, validateBracketSize, async (req, res) => {
+router.post("/", requireAuth, validateTournamentName, validateTournamentDescription, validateTournamentStatus, validateBracketSize, async (req, res) => {
     try {
-        const { name, description, created_by, bracket_size, status } = req.body;
+        const { name, description, bracket_size, status } = req.body;
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
         const tournament = await prisma.tournament.create({
             data: {
                 name,
                 description,
-                created_by,
+                created_by: req.user.id,
                 bracket_size,
                 status,
             },
@@ -63,7 +68,7 @@ router.get("/", async (_req, res) => {
 router.get("/:id", validateTournamentId, async (req, res) => {
     try {
         const id = Number(req.params.id);
-        const tournament = await prisma.tournament.findUnique({
+        let tournament = await prisma.tournament.findUnique({
             where: { id },
             include: {
                 creator: {
@@ -90,6 +95,38 @@ router.get("/:id", validateTournamentId, async (req, res) => {
         if (!tournament) {
             return res.status(404).json({ message: "Tournament not found" });
         }
+        if (tournament.members.length === 6 && tournament.matches.length === 0) {
+            try {
+                await generateBracketMatches(id);
+                tournament = await prisma.tournament.findUnique({
+                    where: { id },
+                    include: {
+                        creator: {
+                            select: {
+                                id: true,
+                                username: true,
+                                email: true,
+                            },
+                        },
+                        members: {
+                            include: {
+                                user: {
+                                    select: {
+                                        id: true,
+                                        username: true,
+                                        email: true,
+                                    },
+                                },
+                            },
+                        },
+                        matches: true,
+                    },
+                });
+            }
+            catch (error) {
+                console.error("Failed to auto-generate bracket matches:", error);
+            }
+        }
         return res.json(tournament);
     }
     catch (err) {
@@ -98,7 +135,7 @@ router.get("/:id", validateTournamentId, async (req, res) => {
     }
 });
 // UPDATE tournament
-router.patch("/:id", validateTournamentId, async (req, res) => {
+router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const { name, description, bracket_size, status } = req.body;
@@ -108,6 +145,17 @@ router.patch("/:id", validateTournamentId, async (req, res) => {
             status === undefined) {
             return res.status(400).json({
                 message: "Provide at least one field to update",
+            });
+        }
+        const existingTournament = await prisma.tournament.findUnique({
+            where: { id },
+        });
+        if (!existingTournament) {
+            return res.status(404).json({ message: "Tournament not found" });
+        }
+        if (!req.user || req.user.id !== existingTournament.created_by) {
+            return res.status(403).json({
+                message: "Only the creator can update this tournament",
             });
         }
         if (name !== undefined) {
@@ -168,17 +216,25 @@ router.patch("/:id", validateTournamentId, async (req, res) => {
         return res.json(updatedTournament);
     }
     catch (err) {
-        if (err?.code === "P2025") {
-            return res.status(404).json({ message: "Tournament not found" });
-        }
         console.error(err);
         return res.status(500).json({ message: "Server error" });
     }
 });
 // DELETE tournament
-router.delete("/:id", validateTournamentId, async (req, res) => {
+router.delete("/:id", requireAuth, validateTournamentId, async (req, res) => {
     try {
         const id = Number(req.params.id);
+        const existingTournament = await prisma.tournament.findUnique({
+            where: { id },
+        });
+        if (!existingTournament) {
+            return res.status(404).json({ message: "Tournament not found" });
+        }
+        if (!req.user || req.user.id !== existingTournament.created_by) {
+            return res.status(403).json({
+                message: "Only the creator can delete this tournament",
+            });
+        }
         await prisma.$transaction([
             prisma.match.deleteMany({
                 where: { tournament_id: id },
@@ -193,9 +249,6 @@ router.delete("/:id", validateTournamentId, async (req, res) => {
         return res.status(204).send();
     }
     catch (err) {
-        if (err?.code === "P2025") {
-            return res.status(404).json({ message: "Tournament not found" });
-        }
         console.error(err);
         return res.status(500).json({ message: "Server error" });
     }

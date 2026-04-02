@@ -26,8 +26,9 @@ register.registerMetric(loginCounter);
 
 app.use(cors({
   origin: [
-    "http://localhost:5173", 
-    "https://ece1779-frontend.fly.dev"
+    "http://localhost:5173",
+    "https://ece1779-frontend.fly.dev",
+    "https://ece1779-testing-frontend.fly.dev"
   ],
   credentials: true
 }));
@@ -52,6 +53,8 @@ const PORT = Number(process.env.PORT) || 3000;
 app.get("/", (req, res) => {
   res.json({ 
     message: "Tournament Tracker API is LIVE in Toronto!",
+    // This line detects if it's inside K8s or just Docker/Local
+    platform: process.env.KUBERNETES_SERVICE_HOST ? "Kubernetes" : "Docker/Local",
     status: "Healthy",
     time: new Date().toISOString()
   });

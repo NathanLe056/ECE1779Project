@@ -1,11 +1,33 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
+import { requireAuth } from "../middleware/authMiddleware.js";
 import { validateTournamentMemberId, validateTournamentId, validateUserId, validateRole, validateRanking, validateUniqueTournamentMember, validateTournamentCapacity, } from "../middleware/tournamentmembertable.js";
 const router = Router();
 // CREATE tournament member
-router.post("/", validateTournamentId, validateUserId, validateRole, validateRanking, validateUniqueTournamentMember, validateTournamentCapacity, async (req, res) => {
+router.post("/", requireAuth, validateTournamentId, validateUserId, validateRole, validateRanking, validateUniqueTournamentMember, validateTournamentCapacity, async (req, res) => {
     try {
         const { tournament_id, user_id, role, ranking } = req.body;
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const tournament = await prisma.tournament.findUnique({
+            where: { id: tournament_id },
+        });
+        if (!tournament) {
+            return res.status(404).json({ message: "Tournament not found" });
+        }
+        const isCreator = req.user.id === tournament.created_by;
+        const isSelfJoin = req.user.id === user_id;
+        if (!isCreator && !isSelfJoin) {
+            return res.status(403).json({
+                message: "You can only add yourself unless you created the tournament",
+            });
+        }
+        if (!isCreator && role !== "player") {
+            return res.status(403).json({
+                message: "You can only join as a player",
+            });
+        }
         const member = await prisma.tournamentMember.create({
             data: {
                 tournament_id,
@@ -101,13 +123,27 @@ router.get("/:id", validateTournamentMemberId, async (req, res) => {
     }
 });
 // UPDATE tournament member
-router.patch("/:id", validateTournamentMemberId, async (req, res) => {
+router.patch("/:id", requireAuth, validateTournamentMemberId, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const { role, ranking } = req.body;
         if (role === undefined && ranking === undefined) {
             return res.status(400).json({
                 message: "Provide at least one field to update",
+            });
+        }
+        const existingMember = await prisma.tournamentMember.findUnique({
+            where: { id },
+            include: {
+                tournament: true,
+            },
+        });
+        if (!existingMember) {
+            return res.status(404).json({ message: "Tournament member not found" });
+        }
+        if (!req.user || req.user.id !== existingMember.tournament.created_by) {
+            return res.status(403).json({
+                message: "Only the tournament creator can update members",
             });
         }
         if (role !== undefined) {
@@ -154,26 +190,36 @@ router.patch("/:id", validateTournamentMemberId, async (req, res) => {
         return res.json(updatedMember);
     }
     catch (err) {
-        if (err?.code === "P2025") {
-            return res.status(404).json({ message: "Tournament member not found" });
-        }
         console.error(err);
         return res.status(500).json({ message: "Server error" });
     }
 });
 // DELETE tournament member
-router.delete("/:id", validateTournamentMemberId, async (req, res) => {
+router.delete("/:id", requireAuth, validateTournamentMemberId, async (req, res) => {
     try {
         const id = Number(req.params.id);
+        const existingMember = await prisma.tournamentMember.findUnique({
+            where: { id },
+            include: {
+                tournament: true,
+            },
+        });
+        if (!existingMember) {
+            return res.status(404).json({ message: "Tournament member not found" });
+        }
+        const isCreator = req.user?.id === existingMember.tournament.created_by;
+        const isSelf = req.user?.id === existingMember.user_id;
+        if (!isCreator && !isSelf) {
+            return res.status(403).json({
+                message: "Only the creator or the member can remove this membership",
+            });
+        }
         await prisma.tournamentMember.delete({
             where: { id },
         });
         return res.status(204).send();
     }
     catch (err) {
-        if (err?.code === "P2025") {
-            return res.status(404).json({ message: "Tournament member not found" });
-        }
         console.error(err);
         return res.status(500).json({ message: "Server error" });
     }

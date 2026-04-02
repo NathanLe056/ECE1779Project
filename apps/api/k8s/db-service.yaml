@@ -3,9 +3,11 @@ kind: Service
 metadata:
   name: db-service
 spec:
+  type: NodePort             # Added this to allow external access
   selector:
-    app: postgres
+    app: postgres            # Ensure this matches the label in your Deployment
   ports:
     - protocol: TCP
-      port: 5433        # This is the port you'll use from your laptop
-      targetPort: 5432  # This is the port inside the pod
+      port: 5432             # Internal K8s port (API looks here)
+      targetPort: 5432       # Port inside the Pod
+      nodePort: 30433        # Access from your laptop via localhost:30433
