@@ -1,11 +1,28 @@
+# Use the newer version from the main branch
 FROM node:22-alpine
+
+# Set the working directory first
 WORKDIR /app
-COPY package*.json ./
+
+# Install openssl (Your K8s/Prisma requirement)
+RUN apk add --no-cache openssl
+
+# Copy dependency files
+COPY package.json package-lock.json ./
 RUN npm install
+
+# Copy the rest of your code
 COPY . .
 
+# 1. GENERATE using the new path to the config
+RUN npx prisma generate --schema ./prisma/schema.prisma
+
+# 2. BUILD
+RUN npm run build
 # ARG DATABASE_URL
 # RUN npx prisma generate
 
 EXPOSE 3000
+
+# Start the app
 CMD ["npm", "run", "start"]
