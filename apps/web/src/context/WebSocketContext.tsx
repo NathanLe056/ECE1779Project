@@ -24,14 +24,15 @@ interface WebSocketContextValue {
   connected: boolean;
 }
 
-const configuredApiBase = import.meta.env.VITE_API_URL || "http://localhost:3000/api/";
+const configuredApiBase =
+  import.meta.env.VITE_API_URL || "http://localhost:3000/api/";
 const isFlyHost = window.location.hostname.endsWith(".fly.dev");
 
 const WS_URL: string = import.meta.env.DEV
   ? configuredApiBase.replace(/\/api\/?$/, "").replace(/^http/, "ws") + "/ws"
-  : (isFlyHost
-      ? configuredApiBase.replace(/\/api\/?$/, "").replace(/^http/, "ws") + "/ws"
-      : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`);
+  : isFlyHost
+    ? configuredApiBase.replace(/\/api\/?$/, "").replace(/^http/, "ws") + "/ws"
+    : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
 
 const RECONNECT_DELAY_MS = 3_000;
 const PING_INTERVAL_MS = 25_000;
