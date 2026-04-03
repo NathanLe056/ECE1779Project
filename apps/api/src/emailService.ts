@@ -34,9 +34,6 @@ export interface TournamentUpdateContext {
 // ---------------------------------------------------------------------------
 
 function buildEmailHtml(ctx: TournamentUpdateContext): string {
-  const fromAddress =
-    process.env.EMAIL_FROM || "Tournament Tracker <notifications@tournamenttracking.com>";
-
   const changeRows = Object.entries(ctx.changes)
     .map(
       ([field, { from, to }]) => `
@@ -140,7 +137,7 @@ function buildEmailHtml(ctx: TournamentUpdateContext): string {
 
 /**
  * Send a tournament-update notification to every listed recipient.
- * Fires all sends concurrently and logs any per-address failures without
+ * Fires all sends concurrently and logs per-address failures without
  * throwing — email is best-effort and should never block the HTTP response.
  */
 export async function sendTournamentUpdateEmails(
@@ -152,7 +149,7 @@ export async function sendTournamentUpdateEmails(
   if (Object.keys(ctx.changes).length === 0) return;
 
   const from =
-    process.env.EMAIL_FROM || "Tournament Tracker <notifications@tournamenttracking.com>";
+    process.env.EMAIL_FROM || "Tournament Tracker <onboarding@resend.dev>";
   const subject = `[${ctx.tournamentName}] Tournament has been updated`;
   const html = buildEmailHtml(ctx);
 
