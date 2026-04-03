@@ -10,7 +10,6 @@ import {
 } from "../middleware/tournamenttable.js";
 import { generateBracketMatches } from "../utils/bracketGenerator.js";
 import { broadcastTournamentUpdate } from "../websocket.js";
-import { sendTournamentUpdateEmails } from "../emailService.js";
 
 const router = Router();
 
@@ -97,8 +96,8 @@ router.get("/my-tournaments", requireAuth, async (req, res) => {
       where: {
         OR: [
           { created_by: req.user.id },
-          { members: { some: { user_id: req.user.id } } },
-        ],
+          { members: { some: { user_id: req.user.id } } }
+        ]
       },
       orderBy: { created_at: "desc" },
       include: {
@@ -233,6 +232,7 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
       if (typeof name !== "string") {
         return res.status(400).json({ message: "Tournament name must be a string" });
       }
+
       if (name.trim().length === 0) {
         return res.status(400).json({ message: "Tournament name cannot be empty" });
       }
@@ -244,6 +244,7 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
           .status(400)
           .json({ message: "Tournament description must be a string" });
       }
+
       if (description.trim().length === 0) {
         return res
           .status(400)
@@ -263,42 +264,12 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
       if (typeof status !== "string") {
         return res.status(400).json({ message: "Status must be a string" });
       }
+
       if (status !== "active" && status !== "inactive") {
         return res
           .status(400)
           .json({ message: 'Status must be either "active" or "inactive"' });
       }
-    }
-
-    // ------------------------------------------------------------------
-    // Build a human-readable diff so the email only lists fields that
-    // actually changed value.
-    // ------------------------------------------------------------------
-    const changes: Record<string, { from: string | number; to: string | number }> = {};
-
-    if (name !== undefined && name.trim() !== existingTournament.name) {
-      changes.name = { from: existingTournament.name, to: name.trim() };
-    }
-    if (
-      description !== undefined &&
-      description.trim() !== (existingTournament.description ?? "")
-    ) {
-      changes.description = {
-        from: existingTournament.description ?? "(none)",
-        to: description.trim(),
-      };
-    }
-    if (
-      bracket_size !== undefined &&
-      bracket_size !== existingTournament.bracket_size
-    ) {
-      changes.bracket_size = {
-        from: existingTournament.bracket_size,
-        to: bracket_size,
-      };
-    }
-    if (status !== undefined && status !== existingTournament.status) {
-      changes.status = { from: existingTournament.status, to: status };
     }
 
     const updatedTournament = await prisma.tournament.update({
@@ -320,39 +291,9 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
       },
     });
 
-    // Broadcast real-time update to all WebSocket clients
+    // Broadcast the update to all connected WebSocket clients so every
+    // browser tab sees the change in real-time without polling.
     broadcastTournamentUpdate(updatedTournament);
-
-    // Send email notifications to all tournament members (non-blocking).
-    // Runs after the response is sent so it never slows down the API.
-    if (Object.keys(changes).length > 0) {
-      prisma.tournamentMember
-        .findMany({
-          where: { tournament_id: id },
-          include: {
-            user: {
-              select: { email: true, username: true },
-            },
-          },
-        })
-        .then((members) => {
-          const recipients = members.map((m) => ({
-            email: m.user.email,
-            username: m.user.username,
-          }));
-
-          return sendTournamentUpdateEmails({
-            tournamentId: id,
-            tournamentName: updatedTournament.name,
-            updatedByUsername: updatedTournament.creator.username,
-            changes,
-            recipients,
-          });
-        })
-        .catch((err) => {
-          console.error("[Email] Failed to dispatch tournament update emails:", err);
-        });
-    }
 
     return res.json(updatedTournament);
   } catch (err) {

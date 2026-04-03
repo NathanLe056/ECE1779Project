@@ -14,6 +14,20 @@ RUN npm install
 # Copy the rest of your code
 COPY . .
 
+ARG DB_HOST
+ARG DB_PORT
+ARG DB_NAME
+ARG DB_USER
+ARG DB_PASSWORD
+ARG DATABASE_URL
+
+ENV DB_HOST=$DB_HOST
+ENV DB_PORT=$DB_PORT
+ENV DB_NAME=$DB_NAME
+ENV DB_USER=$DB_USER
+ENV DB_PASSWORD=$DB_PASSWORD
+ENV DATABASE_URL=$DATABASE_URL
+
 # 1. GENERATE using the new path to the config
 RUN npx prisma generate --schema ./prisma/schema.prisma
 
