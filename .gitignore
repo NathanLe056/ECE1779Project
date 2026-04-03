@@ -52,3 +52,5 @@ npm-pack.tgz
 *.njsproj
 *.sln
 *.sw?
+apps/web/env
+env
