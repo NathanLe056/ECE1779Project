@@ -9,6 +9,7 @@ import {
   validateTournamentId,
 } from "../middleware/tournamenttable.js";
 import { generateBracketMatches } from "../utils/bracketGenerator.js";
+import { broadcastTournamentUpdate } from "../websocket.js";
 
 const router = Router();
 
@@ -289,6 +290,10 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
         },
       },
     });
+
+    // Broadcast the update to all connected WebSocket clients so every
+    // browser tab sees the change in real-time without polling.
+    broadcastTournamentUpdate(updatedTournament);
 
     return res.json(updatedTournament);
   } catch (err) {
