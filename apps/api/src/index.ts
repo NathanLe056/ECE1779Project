@@ -28,10 +28,11 @@ register.registerMetric(loginCounter);
 
 app.use(cors({
   origin: [
-    "https://tournament-web.fly.dev",
     "http://localhost:5172",
-    "https://ece1779-frontend.fly.dev",
-    "https://ece1779-testing-frontend.fly.dev",
+    // This Regex allows any subdomain ending in .fly.dev
+    /^https:\/\/.*\.fly\.dev$/,
+    // This Regex handles your shifting Minikube ports
+    /^http:\/\/127\.0\.0\.1(:\d+)?$/
   ],
   credentials: true
 }));
