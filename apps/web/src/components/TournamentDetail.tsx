@@ -9,6 +9,7 @@ import { joinTournament } from "../api/tournamentMemberApi";
 import TournamentTable from "./TournamentTable";
 import { TournamentWithDetails } from "../types/Tournament";
 import { User } from "../types/User";
+import { useWebSocketContext } from "../context/WebSocketContext";
 
 interface TournamentDetailProps {
   user: User | null;
@@ -40,6 +41,28 @@ function TournamentDetail({
     setTournament(details);
     return details;
   };
+
+  // ── WebSocket: live tournament updates ────────────────────────────────────
+  const { lastMessage } = useWebSocketContext();
+
+  useEffect(() => {
+    if (!lastMessage || !tournament) return;
+
+    if (lastMessage.type === "TOURNAMENT_UPDATED") {
+      const updated = lastMessage.payload;
+      // Only update if this message is about the tournament we're viewing
+      if (updated && updated.id === tournament.id) {
+        // Merge top-level scalar fields (name, status, description, etc.)
+        // but preserve deeply-loaded relations (members, matches) that the
+        // PATCH response doesn't include in full.
+        setTournament((prev) => {
+          if (!prev) return prev;
+          return { ...prev, ...updated };
+        });
+      }
+    }
+  }, [lastMessage, tournament?.id]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const fetchTournament = async () => {
