@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for api-backend-testing on 2026-04-01T20:35:43-04:00
+# fly.toml app configuration file generated for tournament-api on 2026-04-02T21:30:04-04:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'api-backend-testing'
+app = 'tournament-api'
 primary_region = 'yyz'
 
 [build]
