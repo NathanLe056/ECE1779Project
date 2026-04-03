@@ -9,11 +9,27 @@ import TournamentDetail from "./components/TournamentDetail";
 import Profile from "./components/Profile";
 import { TournamentSummary } from "./types/Tournament";
 import { User } from "./types/User";
+import { useWebSocketContext } from "./context/WebSocketContext";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [tournaments, setTournaments] = useState<TournamentSummary[]>([]);
+
+  // ── WebSocket: react to real-time tournament updates ──────────────────────
+  const { lastMessage } = useWebSocketContext();
+
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    if (lastMessage.type === "TOURNAMENT_UPDATED") {
+      const updated = lastMessage.payload as TournamentSummary;
+      setTournaments((prev) =>
+        prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+      );
+    }
+  }, [lastMessage]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const restoreSession = async () => {
