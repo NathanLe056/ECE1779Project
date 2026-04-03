@@ -31,7 +31,7 @@ app.use(cors({
     "http://localhost:5172",
     // This Regex allows any subdomain ending in .fly.dev
     /^https:\/\/.*\.fly\.dev$/,
-    // This Regex handles your shifting Minikube ports
+    // Regex for Minikube ports
     /^http:\/\/127\.0\.0\.1(:\d+)?$/
   ],
   credentials: true

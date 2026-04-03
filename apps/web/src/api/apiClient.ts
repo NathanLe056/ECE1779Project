@@ -1,15 +1,9 @@
-// 1. Get the current browser URL details
-const isMinikube = window.location.hostname === "127.0.0.1";
-const currentPort = window.location.port;
+const configuredApiBase = import.meta.env.VITE_API_URL || "http://localhost:3000/api/";
+const isFlyHost = window.location.hostname.endsWith(".fly.dev");
 
-// 2. Determine the Base URL
-// If we are on Minikube, we use the same IP but point to the API port (3000)
-// Otherwise, we use the Environment Variable or the default localhost
-const minikubeApi = `http://127.0.0.1:3000/api/`; 
-
-export const API_BASE = isMinikube 
-  ? minikubeApi 
-  : (import.meta.env.VITE_API_URL || "http://localhost:3000/api/"); //first one is for fly.io. also adding .env in web folder to define viteapiurl
+export const API_BASE = import.meta.env.DEV
+  ? configuredApiBase
+  : (isFlyHost ? configuredApiBase : "/api/");
 
 export async function apiFetch<T>(
   endpoint: string,
