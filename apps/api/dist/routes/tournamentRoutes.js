@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { validateTournamentName, validateTournamentDescription, validateTournamentStatus, validateBracketSize, validateTournamentId, } from "../middleware/tournamenttable.js";
 import { generateBracketMatches } from "../utils/bracketGenerator.js";
+import { broadcastTournamentUpdate } from "../websocket.js";
 const router = Router();
 // CREATE tournament
 router.post("/", requireAuth, validateTournamentName, validateTournamentDescription, validateTournamentStatus, validateBracketSize, async (req, res) => {
@@ -40,6 +41,43 @@ router.post("/", requireAuth, validateTournamentName, validateTournamentDescript
 router.get("/", async (_req, res) => {
     try {
         const tournaments = await prisma.tournament.findMany({
+            orderBy: { created_at: "desc" },
+            include: {
+                creator: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                    },
+                },
+                _count: {
+                    select: {
+                        members: true,
+                        matches: true,
+                    },
+                },
+            },
+        });
+        return res.json(tournaments);
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: "Server error" });
+    }
+});
+// READ my tournaments
+router.get("/my-tournaments", requireAuth, async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const tournaments = await prisma.tournament.findMany({
+            where: {
+                OR: [
+                    { created_by: req.user.id },
+                    { members: { some: { user_id: req.user.id } } }
+                ]
+            },
             orderBy: { created_at: "desc" },
             include: {
                 creator: {
@@ -213,6 +251,9 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
                 },
             },
         });
+        // Broadcast the update to all connected WebSocket clients so every
+        // browser tab sees the change in real-time without polling.
+        broadcastTournamentUpdate(updatedTournament);
         return res.json(updatedTournament);
     }
     catch (err) {

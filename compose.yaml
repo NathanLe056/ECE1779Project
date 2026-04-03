@@ -29,6 +29,8 @@ services:
 
   frontend:
     build: ./apps/web
+    environment:
+      - API_UPSTREAM=api:3000
     ports:
       - "5172:80"
     depends_on:

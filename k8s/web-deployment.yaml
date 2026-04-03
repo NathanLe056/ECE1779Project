@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: tournament-web-k8s:1.0
+          env:
+            - name: API_UPSTREAM
+              value: api-service:3000
+          ports:
+            - containerPort: 80
