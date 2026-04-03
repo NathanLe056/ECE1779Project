@@ -1,9 +1,7 @@
 import { Resend } from "resend";
 
-// ---------------------------------------------------------------------------
-// Client — lazily initialised so missing env vars don't crash startup
-// ---------------------------------------------------------------------------
 
+// Client initialised so missing env vars don't crash startup
 let resend: Resend | null = null;
 
 function getClient(): Resend | null {
@@ -17,10 +15,7 @@ function getClient(): Resend | null {
   return resend;
 }
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
-
 export interface TournamentUpdateContext {
   tournamentId: number;
   tournamentName: string;
@@ -29,10 +24,7 @@ export interface TournamentUpdateContext {
   recipients: Array<{ email: string; username: string }>;
 }
 
-// ---------------------------------------------------------------------------
 // HTML template
-// ---------------------------------------------------------------------------
-
 function buildEmailHtml(ctx: TournamentUpdateContext): string {
   const changeRows = Object.entries(ctx.changes)
     .map(
@@ -131,10 +123,7 @@ function buildEmailHtml(ctx: TournamentUpdateContext): string {
 </html>`;
 }
 
-// ---------------------------------------------------------------------------
 // Public API
-// ---------------------------------------------------------------------------
-
 /**
  * Send a tournament-update notification to every listed recipient.
  * Fires all sends concurrently and logs per-address failures without
