@@ -28,9 +28,10 @@ register.registerMetric(loginCounter);
 
 app.use(cors({
   origin: [
+    "https://tournament-web.fly.dev",
     "http://localhost:5172",
     "https://ece1779-frontend.fly.dev",
-    "https://ece1779-testing-frontend.fly.dev"
+    "https://ece1779-testing-frontend.fly.dev",
   ],
   credentials: true
 }));

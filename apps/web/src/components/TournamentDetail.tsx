@@ -1,6 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getTournament, deleteTournament } from "../api/tournamentApi";
+import {
+  getTournament,
+  deleteTournament,
+  generateBracket,
+} from "../api/tournamentApi";
 import { joinTournament } from "../api/tournamentMemberApi";
 import TournamentTable from "./TournamentTable";
 import { TournamentWithDetails } from "../types/Tournament";
@@ -30,6 +34,13 @@ function TournamentDetail({
   const [joinRanking, setJoinRanking] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const autoBracketAttemptRef = useRef<string | null>(null);
+
+  const loadTournament = async (tournamentId: number) => {
+    const details = await getTournament(tournamentId);
+    setTournament(details);
+    return details;
+  };
 
   // ── WebSocket: live tournament updates ────────────────────────────────────
   const { lastMessage } = useWebSocketContext();
@@ -57,6 +68,8 @@ function TournamentDetail({
     const fetchTournament = async () => {
       if (!id) return;
 
+      autoBracketAttemptRef.current = null;
+
       setLoading(true);
       setError(null);
 
@@ -65,8 +78,7 @@ function TournamentDetail({
         if (isNaN(tournamentId)) {
           throw new Error("Invalid tournament ID");
         }
-        const data = await getTournament(tournamentId);
-        setTournament(data);
+        await loadTournament(tournamentId);
       } catch (err: any) {
         setError(err.message || "Failed to fetch tournament details");
       } finally {
@@ -76,6 +88,51 @@ function TournamentDetail({
 
     fetchTournament();
   }, [id]);
+
+  useEffect(() => {
+    if (!tournament || !user || user.id !== tournament.created_by) {
+      return;
+    }
+
+    const playerCount = tournament.members.filter(
+      (member) => member.role === "player",
+    ).length;
+    const quarterfinalCount = tournament.matches.filter(
+      (match) => match.round_number === 1,
+    ).length;
+
+    if (playerCount !== 6 || quarterfinalCount > 0) {
+      return;
+    }
+
+    const attemptKey = `${tournament.id}:${playerCount}:${quarterfinalCount}`;
+    if (autoBracketAttemptRef.current === attemptKey) {
+      return;
+    }
+
+    autoBracketAttemptRef.current = attemptKey;
+
+    let isCancelled = false;
+
+    const ensureBracketMatches = async () => {
+      try {
+        await generateBracket(tournament.id);
+        if (isCancelled) {
+          return;
+        }
+        await loadTournament(tournament.id);
+      } catch (err) {
+        autoBracketAttemptRef.current = null;
+        console.error("Failed to auto-create quarterfinal matchups:", err);
+      }
+    };
+
+    void ensureBracketMatches();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [tournament, user]);
 
   const handleJoinTournament = async () => {
     if (!tournament || !user) {
@@ -101,8 +158,7 @@ function TournamentDetail({
         ranking: parsedRanking,
       });
 
-      const updatedDetails = await getTournament(tournament.id);
-      setTournament(updatedDetails);
+      await loadTournament(tournament.id);
       setJoinMessage("You joined this tournament successfully.");
       setJoinRanking("");
     } catch (err: any) {
