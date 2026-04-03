@@ -1,3 +1,4 @@
+import { createServer } from "http";
 import express from "express";
 import cors from "cors";
 import client from "prom-client"; // 1. Import the client
@@ -6,6 +7,7 @@ import UserRoutes from "./routes/UserRoutes.js";
 import tournamentRoutes from "./routes/tournamentRoutes.js";
 import matchRoutes from "./routes/matchRoutes.js";
 import tournamentMemberRoutes from "./routes/tournamentMemberRoutes.js";
+import { initWebSocketServer } from "./websocket.js";
 const app = express();
 // 2. Initialize Prometheus Metrics
 const register = new client.Registry();
@@ -15,14 +17,16 @@ export const loginCounter = new client.Counter({
     name: 'api_login_success_total',
     help: 'Total number of successful logins'
 });
-// Note: You don't actually need register.registerMetric(loginCounter) 
+// Note: You don't actually need register.registerMetric(loginCounter)
 // if you are using the global registry, but keeping it won't hurt.
 register.registerMetric(loginCounter);
 app.use(cors({
     origin: [
-        "http://localhost:5173",
-        "https://ece1779-frontend.fly.dev",
-        "https://ece1779-testing-frontend.fly.dev"
+        "http://localhost:5172",
+        // This Regex allows any subdomain ending in .fly.dev
+        /^https:\/\/.*\.fly\.dev$/,
+        // This Regex handles your shifting Minikube ports
+        /^http:\/\/127\.0\.0\.1(:\d+)?$/
     ],
     credentials: true
 }));
@@ -48,6 +52,10 @@ app.get("/", (req, res) => {
         time: new Date().toISOString()
     });
 });
-app.listen(PORT, "0.0.0.0", () => {
+// 5. Create an HTTP server from the Express app, then attach the WebSocket
+//    server to the same port so both HTTP and WS traffic share one port.
+const server = createServer(app);
+initWebSocketServer(server);
+server.listen(PORT, "0.0.0.0", () => {
     console.log(`API running on port ${PORT}`);
 });

@@ -3,15 +3,86 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { generateBracketMatches } from "../utils/bracketGenerator.js";
 const router = Router();
+const ALLOWED_MATCH_STATUSES = [
+    "not started",
+    "pending",
+    "completed",
+    "cancelled",
+    "bypass",
+];
+function getRoundOrderKey(roundNumber, matchOrder) {
+    return `${roundNumber}-${matchOrder}`;
+}
+async function ensureLaterRoundMatches(tournament_id) {
+    const existingMatches = await prisma.match.findMany({
+        where: { tournament_id },
+        orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+    });
+    const matchByRoundAndOrder = new Map(existingMatches.map((match) => [getRoundOrderKey(match.round_number, match.match_order), match]));
+    const members = await prisma.tournamentMember.findMany({
+        where: { tournament_id },
+        orderBy: { id: "asc" },
+    });
+    const seed1 = members[0]?.user_id ?? -1;
+    const seed2 = members[1]?.user_id ?? -1;
+    const requiredMatches = [
+        {
+            round_number: 2,
+            match_order: 1,
+            player1_id: seed1,
+            player2_id: -1,
+        },
+        {
+            round_number: 2,
+            match_order: 2,
+            player1_id: seed2,
+            player2_id: -1,
+        },
+        {
+            round_number: 3,
+            match_order: 1,
+            player1_id: -1,
+            player2_id: -1,
+        },
+    ];
+    for (const requiredMatch of requiredMatches) {
+        const key = getRoundOrderKey(requiredMatch.round_number, requiredMatch.match_order);
+        if (matchByRoundAndOrder.has(key)) {
+            continue;
+        }
+        await prisma.match.create({
+            data: {
+                tournament_id,
+                player1_id: requiredMatch.player1_id,
+                player2_id: requiredMatch.player2_id,
+                winner_id: null,
+                round_number: requiredMatch.round_number,
+                match_order: requiredMatch.match_order,
+                match_status: "pending",
+            },
+        });
+    }
+    return prisma.match.findMany({
+        where: { tournament_id },
+        orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+    });
+}
 function getNextMatchSlot(currentMatch, matchByRoundAndOrder) {
-    if (currentMatch.round_number === 1 && [1, 2].includes(currentMatch.match_order)) {
-        const nextMatch = matchByRoundAndOrder.get(`2-${currentMatch.match_order}`);
+    // QF1 winner -> SF2 player2, QF2 winner -> SF1 player2
+    if (currentMatch.round_number === 1 && currentMatch.match_order === 1) {
+        const nextMatch = matchByRoundAndOrder.get(getRoundOrderKey(2, 2));
+        if (!nextMatch)
+            return null;
+        return { nextMatch, slot: "player2_id" };
+    }
+    if (currentMatch.round_number === 1 && currentMatch.match_order === 2) {
+        const nextMatch = matchByRoundAndOrder.get(getRoundOrderKey(2, 1));
         if (!nextMatch)
             return null;
         return { nextMatch, slot: "player2_id" };
     }
     if (currentMatch.round_number === 2 && [1, 2].includes(currentMatch.match_order)) {
-        const finalMatch = matchByRoundAndOrder.get("3-1");
+        const finalMatch = matchByRoundAndOrder.get(getRoundOrderKey(3, 1));
         if (!finalMatch)
             return null;
         return {
@@ -23,7 +94,7 @@ function getNextMatchSlot(currentMatch, matchByRoundAndOrder) {
 }
 function propagateWinnerChanges(matches, startMatchId) {
     const matchById = new Map(matches.map((match) => [match.id, match]));
-    const matchByRoundAndOrder = new Map(matches.map((match) => [`${match.round_number}-${match.match_order}`, match]));
+    const matchByRoundAndOrder = new Map(matches.map((match) => [getRoundOrderKey(match.round_number, match.match_order), match]));
     const updates = new Map();
     const queue = [startMatchId];
     const queued = new Set(queue);
@@ -49,7 +120,7 @@ function propagateWinnerChanges(matches, startMatchId) {
             nextMatch.winner_id !== nextMatch.player2_id;
         if (participantChanged || winnerInvalid) {
             const shouldResetWinner = nextMatch.winner_id !== null;
-            const shouldResetStatus = nextMatch.match_status === "completed";
+            const shouldResetStatus = ["completed", "bypass"].includes(nextMatch.match_status);
             if (shouldResetWinner || shouldResetStatus) {
                 nextMatch.winner_id = null;
                 if (shouldResetStatus) {
@@ -122,6 +193,7 @@ router.get("/tournament/:tournament_id", async (req, res) => {
                 console.error("Auto-generate matches skipped:", error);
             }
         }
+        matches = await ensureLaterRoundMatches(tournament_id);
         return res.json(matches);
     }
     catch (error) {
@@ -186,7 +258,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
                     message: "match_status must be a string",
                 });
             }
-            if (!["pending", "completed", "cancelled", "not started", "bypass"].includes(match_status)) {
+            if (!ALLOWED_MATCH_STATUSES.includes(match_status)) {
                 return res.status(400).json({
                     message: 'match_status must be one of: "pending", "completed", "cancelled", "not started", "bypass"',
                 });
@@ -198,30 +270,52 @@ router.patch("/:id", requireAuth, async (req, res) => {
         if (player2_id !== undefined && !Number.isInteger(player2_id)) {
             return res.status(400).json({ message: "player2_id must be an integer" });
         }
-        const updatedMatch = await prisma.match.update({
-            where: { id },
-            data: {
-                ...(winner_id !== undefined && { winner_id: winner_id === null ? null : winner_id }),
-                ...(match_status !== undefined && { match_status }),
-                ...(player1_id !== undefined && { player1_id }),
-                ...(player2_id !== undefined && { player2_id }),
-            },
-        });
-        const allMatches = (await prisma.match.findMany({
-            where: { tournament_id: updatedMatch.tournament_id },
-            orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
-        }));
-        const propagatedUpdates = propagateWinnerChanges(allMatches, updatedMatch.id);
-        if (propagatedUpdates.length > 0) {
-            await prisma.$transaction(propagatedUpdates.map((update) => prisma.match.update({
-                where: { id: update.id },
-                data: update.data,
-            })));
+        const nextPlayer1Id = player1_id ?? existingMatch.player1_id;
+        const nextPlayer2Id = player2_id ?? existingMatch.player2_id;
+        const nextMatchStatus = match_status ?? existingMatch.match_status;
+        const nextWinnerId = winner_id !== undefined ? winner_id : existingMatch.winner_id;
+        if (nextWinnerId !== null &&
+            nextWinnerId !== nextPlayer1Id &&
+            nextWinnerId !== nextPlayer2Id) {
+            return res.status(400).json({
+                message: "winner_id must match player1_id or player2_id",
+            });
         }
-        // Return all tournament matches so client can refresh from one response.
-        const refreshedMatches = await prisma.match.findMany({
-            where: { tournament_id: updatedMatch.tournament_id },
-            orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+        if (nextWinnerId !== null && nextMatchStatus !== "completed") {
+            return res.status(400).json({
+                message: "winner_id can only be set when match_status is completed",
+            });
+        }
+        await ensureLaterRoundMatches(existingMatch.tournament_id);
+        const { updatedMatch, refreshedMatches } = await prisma.$transaction(async (tx) => {
+            const transactionUpdatedMatch = await tx.match.update({
+                where: { id },
+                data: {
+                    ...(winner_id !== undefined && { winner_id: winner_id === null ? null : winner_id }),
+                    ...(match_status !== undefined && { match_status }),
+                    ...(player1_id !== undefined && { player1_id }),
+                    ...(player2_id !== undefined && { player2_id }),
+                },
+            });
+            const allMatches = (await tx.match.findMany({
+                where: { tournament_id: transactionUpdatedMatch.tournament_id },
+                orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+            }));
+            const propagatedUpdates = propagateWinnerChanges(allMatches, transactionUpdatedMatch.id);
+            for (const update of propagatedUpdates) {
+                await tx.match.update({
+                    where: { id: update.id },
+                    data: update.data,
+                });
+            }
+            const transactionRefreshedMatches = await tx.match.findMany({
+                where: { tournament_id: transactionUpdatedMatch.tournament_id },
+                orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+            });
+            return {
+                updatedMatch: transactionUpdatedMatch,
+                refreshedMatches: transactionRefreshedMatches,
+            };
         });
         return res.json({
             message: "Match updated successfully",

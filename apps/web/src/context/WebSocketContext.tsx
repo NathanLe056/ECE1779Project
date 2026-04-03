@@ -24,26 +24,18 @@ interface WebSocketContextValue {
   connected: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Derive the WebSocket URL from the same env-var used by the HTTP client.
-//   VITE_API_URL = "http://localhost:3000/api/"
-//   → WS URL     = "ws://localhost:3000/ws"
-//
-//   VITE_API_URL = "https://api.example.com/api/"
-//   → WS URL     = "wss://api.example.com/ws"
-// ---------------------------------------------------------------------------
-
-const API_URL: string =
+const configuredApiBase =
   import.meta.env.VITE_API_URL || "http://localhost:3000/api/";
+const isFlyHost = window.location.hostname.endsWith(".fly.dev");
 
-const WS_URL: string =
-  API_URL
-    .replace(/\/api\/?$/, "")   // strip trailing /api[/]
-    .replace(/^http/, "ws")     // http → ws  |  https → wss
-  + "/ws";
+const WS_URL: string = import.meta.env.DEV
+  ? configuredApiBase.replace(/\/api\/?$/, "").replace(/^http/, "ws") + "/ws"
+  : isFlyHost
+    ? configuredApiBase.replace(/\/api\/?$/, "").replace(/^http/, "ws") + "/ws"
+    : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
 
 const RECONNECT_DELAY_MS = 3_000;
-const PING_INTERVAL_MS   = 25_000;
+const PING_INTERVAL_MS = 25_000;
 
 // ---------------------------------------------------------------------------
 // Context
@@ -60,12 +52,12 @@ const WebSocketContext = createContext<WebSocketContextValue>({
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
-  const [connected, setConnected]     = useState(false);
+  const [connected, setConnected] = useState(false);
 
-  const wsRef              = useRef<WebSocket | null>(null);
-  const reconnectTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pingTimerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
-  const unmountedRef       = useRef(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unmountedRef = useRef(false);
 
   const clearPingTimer = () => {
     if (pingTimerRef.current !== null) {
@@ -99,7 +91,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      if (unmountedRef.current) { ws.close(); return; }
+      if (unmountedRef.current) {
+        ws.close();
+        return;
+      }
       console.log("[WS] Connected");
       setConnected(true);
       clearReconnectTimer();
@@ -129,7 +124,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       clearPingTimer();
       setConnected(false);
       if (unmountedRef.current) return;
-      console.log(`[WS] Disconnected. Reconnecting in ${RECONNECT_DELAY_MS}ms…`);
+      console.log(
+        `[WS] Disconnected. Reconnecting in ${RECONNECT_DELAY_MS}ms…`,
+      );
       clearReconnectTimer();
       reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY_MS);
     };

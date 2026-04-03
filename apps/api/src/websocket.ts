@@ -57,7 +57,7 @@ export function broadcastTournamentUpdate(tournament: object): void {
   });
 
   let sent = 0;
-  wss.clients.forEach((client) => {
+  wss.clients.forEach((client: WebSocket) => { //nathan changed this line. it was giving me error: typescript cant guess what "client" is
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
       sent++;
