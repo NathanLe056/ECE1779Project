@@ -1,4 +1,4 @@
-### Development Guide
+# Development Guide
 
 There are 3 main files that are not in the repo that are needed to deploy the app both locally and on fly.io. Please refer to the email for these files.
 
@@ -138,7 +138,7 @@ minikube delete
 
 ## Fly.io Deployment
 
-# Create a persistent PostgreSQL app
+### Create a persistent PostgreSQL app
 
 1. Run the following command.
 
@@ -150,7 +150,7 @@ fly postgres create --name {tournament-db} --region yyz
 3. Enter “y” to “Scale single node pg to zero after one hour? (y/N).”
 4. Wait for app to be created.
 
-# Create the api back-end app
+### Create the api back-end app
 
 1. Navigate to the api app
 
@@ -191,7 +191,7 @@ fly deploy --app {tournament-api}
 
 8. Wait for app to be deployed.
 
-# Create the web front-end app
+### Create the web front-end app
 
 1. Navigate to the web app
 
