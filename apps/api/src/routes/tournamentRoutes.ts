@@ -10,6 +10,7 @@ import {
 } from "../middleware/tournamenttable.js";
 import { generateBracketMatches } from "../utils/bracketGenerator.js";
 import { broadcastTournamentUpdate } from "../websocket.js";
+import { sendTournamentUpdateEmails } from "../emailService.js";
 
 const router = Router();
 
@@ -272,6 +273,28 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
       }
     }
 
+    // Build a diff of only the fields that actually changed value.
+    const changes: Record<string, { from: string | number; to: string | number }> = {};
+
+    if (name !== undefined && name.trim() !== existingTournament.name) {
+      changes.name = { from: existingTournament.name, to: name.trim() };
+    }
+    if (
+      description !== undefined &&
+      description.trim() !== (existingTournament.description ?? "")
+    ) {
+      changes.description = {
+        from: existingTournament.description ?? "(none)",
+        to: description.trim(),
+      };
+    }
+    if (bracket_size !== undefined && bracket_size !== existingTournament.bracket_size) {
+      changes.bracket_size = { from: existingTournament.bracket_size, to: bracket_size };
+    }
+    if (status !== undefined && status !== existingTournament.status) {
+      changes.status = { from: existingTournament.status, to: status };
+    }
+
     const updatedTournament = await prisma.tournament.update({
       where: { id },
       data: {
@@ -291,9 +314,36 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
       },
     });
 
-    // Broadcast the update to all connected WebSocket clients so every
-    // browser tab sees the change in real-time without polling.
+    // Broadcast real-time update to all WebSocket clients.
     broadcastTournamentUpdate(updatedTournament);
+
+    // Send email notifications to all tournament members (non-blocking).
+    // Runs detached so it never delays the HTTP response.
+    if (Object.keys(changes).length > 0) {
+      prisma.tournamentMember
+        .findMany({
+          where: { tournament_id: id },
+          include: {
+            user: { select: { email: true, username: true } },
+          },
+        })
+        .then((members: Array<{ user: { email: string; username: string } }>) => {
+          const recipients = members.map((m: { user: { email: string; username: string } }) => ({
+            email: m.user.email,
+            username: m.user.username,
+          }));
+          return sendTournamentUpdateEmails({
+            tournamentId: id,
+            tournamentName: updatedTournament.name,
+            updatedByUsername: updatedTournament.creator.username,
+            changes,
+            recipients,
+          });
+        })
+        .catch((err: unknown) => {
+          console.error("[Email] Failed to dispatch tournament update emails:", err);
+        });
+    }
 
     return res.json(updatedTournament);
   } catch (err) {
