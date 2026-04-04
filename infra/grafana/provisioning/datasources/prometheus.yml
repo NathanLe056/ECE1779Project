@@ -6,4 +6,4 @@ datasources:
     access: proxy
     url: https://tournament-prometheus-n.fly.dev
     isDefault: true
-    editable: false
+    editable: true
