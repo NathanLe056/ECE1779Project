@@ -3,14 +3,14 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'tournament-web'
+app = 'tournament-web-n'
 primary_region = 'yyz'
 
 [build]
   dockerfile = 'Dockerfile'
 
 [env]
-  API_UPSTREAM = 'tournament-api.fly.dev'
+  API_UPSTREAM = 'tournament-api-n.fly.dev'
 
 [http_service]
   internal_port = 80

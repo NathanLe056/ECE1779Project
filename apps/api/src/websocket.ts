@@ -1,5 +1,11 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage, Server } from "http";
+import {
+  wsConnectionsActive,
+  wsConnectionsTotal,
+  wsBroadcastsTotal,
+  wsMessagesSentTotal,
+} from "./metrics.js";
 
 let wss: WebSocketServer | null = null;
 
@@ -15,6 +21,9 @@ export function initWebSocketServer(server: Server): void {
     const ip = req.socket.remoteAddress ?? "unknown";
     console.log(`[WS] Client connected from ${ip}`);
 
+    wsConnectionsTotal.inc();
+    wsConnectionsActive.inc();
+
     // Keep the connection alive with pings every 30 s
     const pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -28,11 +37,13 @@ export function initWebSocketServer(server: Server): void {
 
     ws.on("close", () => {
       clearInterval(pingInterval);
+      wsConnectionsActive.dec();
       console.log(`[WS] Client disconnected (${ip})`);
     });
 
     ws.on("error", (err: Error) => {
       clearInterval(pingInterval);
+      wsConnectionsActive.dec();
       console.error(`[WS] Client error (${ip}):`, err.message);
     });
   });
@@ -57,12 +68,15 @@ export function broadcastTournamentUpdate(tournament: object): void {
   });
 
   let sent = 0;
-  wss.clients.forEach((client: WebSocket) => { //nathan changed this line. it was giving me error: typescript cant guess what "client" is
+  wss.clients.forEach((client: WebSocket) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
       sent++;
     }
   });
+
+  wsBroadcastsTotal.inc();
+  wsMessagesSentTotal.inc(sent);
 
   console.log(`[WS] Broadcasted TOURNAMENT_UPDATED to ${sent} client(s)`);
 }

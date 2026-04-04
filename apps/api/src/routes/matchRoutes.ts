@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { generateBracketMatches } from "../utils/bracketGenerator.js";
+import { matchesCreatedTotal, matchesUpdatedTotal } from "../metrics.js";
 
 const router = Router();
 
@@ -208,6 +209,7 @@ router.post("/generate-bracket/:tournament_id", requireAuth, async (req, res) =>
     }
 
     const result = await generateBracketMatches(tournament_id);
+    matchesCreatedTotal.inc();
     return res.status(201).json(result);
   } catch (error: any) {
     console.error("Error generating bracket:", error);
@@ -399,6 +401,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
       };
     });
 
+    matchesUpdatedTotal.inc();
     return res.json({
       message: "Match updated successfully",
       match: updatedMatch,

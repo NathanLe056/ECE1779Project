@@ -1,7 +1,7 @@
 import { Resend } from "resend";
+import { emailsSentTotal } from "./metrics.js";
 
-
-// Client initialised so missing env vars don't crash startup
+// Lazy-init so missing env vars don't crash startup
 let resend: Resend | null = null;
 
 function getClient(): Resend | null {
@@ -15,7 +15,6 @@ function getClient(): Resend | null {
   return resend;
 }
 
-// Types
 export interface TournamentUpdateContext {
   tournamentId: number;
   tournamentName: string;
@@ -24,7 +23,6 @@ export interface TournamentUpdateContext {
   recipients: Array<{ email: string; username: string }>;
 }
 
-// HTML template
 function buildEmailHtml(ctx: TournamentUpdateContext): string {
   const changeRows = Object.entries(ctx.changes)
     .map(
@@ -64,7 +62,7 @@ function buildEmailHtml(ctx: TournamentUpdateContext): string {
           <tr>
             <td style="background:#1d4ed8;padding:28px 32px;">
               <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">
-                🏆 Tournament Updated
+                Tournament Updated
               </h1>
               <p style="margin:6px 0 0;color:#bfdbfe;font-size:14px;">
                 ${ctx.tournamentName}
@@ -99,7 +97,7 @@ function buildEmailHtml(ctx: TournamentUpdateContext): string {
               <!-- CTA -->
               <a href="${tournamentUrl}"
                  style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;font-size:14px;">
-                View Tournament →
+                View Tournament
               </a>
             </td>
           </tr>
@@ -123,17 +121,18 @@ function buildEmailHtml(ctx: TournamentUpdateContext): string {
 </html>`;
 }
 
-// Public API
 /**
  * Send a tournament-update notification to every listed recipient.
- * Fires all sends concurrently and logs per-address failures without
- * throwing — email is best-effort and should never block the HTTP response.
+ * Fires concurrently; failures are logged but never thrown.
  */
 export async function sendTournamentUpdateEmails(
   ctx: TournamentUpdateContext
 ): Promise<void> {
   const client = getClient();
-  if (!client) return;
+  if (!client) {
+    emailsSentTotal.inc({ result: "skipped" }, ctx.recipients.length);
+    return;
+  }
   if (ctx.recipients.length === 0) return;
   if (Object.keys(ctx.changes).length === 0) return;
 
@@ -151,11 +150,14 @@ export async function sendTournamentUpdateEmails(
         html,
       });
       if (error) {
+        emailsSentTotal.inc({ result: "failed" });
         console.error(`[Email] Failed to send to ${email}:`, error);
       } else {
+        emailsSentTotal.inc({ result: "success" });
         console.log(`[Email] Sent update notification to ${email} (${username})`);
       }
     } catch (err) {
+      emailsSentTotal.inc({ result: "failed" });
       console.error(`[Email] Unexpected error sending to ${email}:`, err);
     }
   });
