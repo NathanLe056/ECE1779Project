@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
 import { generateToken } from "../utils/auth.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
-import { loginCounter } from "../index.js"; // 1. IMPORT THE COUNTER
+import { loginTotal, signupTotal } from "../metrics.js";
 
 const router = Router();
 
@@ -30,6 +30,7 @@ router.post("/signup", async (req, res) => {
     });
 
     if (existingEmail) {
+      signupTotal.inc({ result: "email_exists" });
       return res.status(409).json({ message: "Email already exists" });
     }
 
@@ -38,6 +39,7 @@ router.post("/signup", async (req, res) => {
     });
 
     if (existingUsername) {
+      signupTotal.inc({ result: "username_exists" });
       return res.status(409).json({ message: "Username already exists" });
     }
 
@@ -62,6 +64,8 @@ router.post("/signup", async (req, res) => {
       email: user.email,
     });
 
+    signupTotal.inc({ result: "success" });
+
     return res.status(201).json({
       message: "User created successfully",
       token,
@@ -69,6 +73,7 @@ router.post("/signup", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    signupTotal.inc({ result: "error" });
     return res.status(500).json({ message: "Server error" });
   }
 });
@@ -90,17 +95,18 @@ router.post("/login", async (req, res) => {
     });
 
     if (!user) {
+      loginTotal.inc({ result: "invalid_credentials" });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
+      loginTotal.inc({ result: "invalid_credentials" });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // 2. TRIGGER THE COUNTER HERE (Success!)
-    loginCounter.inc();
+    loginTotal.inc({ result: "success" });
     
     const token = generateToken({
       userId: user.id,
@@ -119,6 +125,7 @@ router.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    loginTotal.inc({ result: "error" });
     return res.status(500).json({ message: "Server error" });
   }
 });

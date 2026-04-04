@@ -10,6 +10,7 @@ import {
   validateUniqueTournamentMember,
   validateTournamentCapacity,
 } from "../middleware/tournamentmembertable.js";
+import { tournamentMembersJoinedTotal, tournamentMembersRemovedTotal } from "../metrics.js";
 
 const router = Router();
 
@@ -79,6 +80,7 @@ router.post(
         },
       });
 
+      tournamentMembersJoinedTotal.inc();
       return res.status(201).json(member);
     } catch (err) {
       console.error(err);
@@ -264,6 +266,7 @@ router.delete("/:id", requireAuth, validateTournamentMemberId, async (req, res) 
       where: { id },
     });
 
+    tournamentMembersRemovedTotal.inc();
     return res.status(204).send();
   } catch (err) {
     console.error(err);

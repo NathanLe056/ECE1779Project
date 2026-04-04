@@ -11,6 +11,11 @@ import {
 import { generateBracketMatches } from "../utils/bracketGenerator.js";
 import { broadcastTournamentUpdate } from "../websocket.js";
 import { sendTournamentUpdateEmails } from "../emailService.js";
+import {
+  tournamentsCreatedTotal,
+  tournamentsUpdatedTotal,
+  tournamentsDeletedTotal,
+} from "../metrics.js";
 
 const router = Router();
 
@@ -49,6 +54,7 @@ router.post(
         },
       });
 
+      tournamentsCreatedTotal.inc();
       return res.status(201).json(tournament);
     } catch (err) {
       console.error(err);
@@ -273,7 +279,7 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
       }
     }
 
-    // Build a diff of only the fields that actually changed value.
+    // Diff fields that actually changed
     const changes: Record<string, { from: string | number; to: string | number }> = {};
 
     if (name !== undefined && name.trim() !== existingTournament.name) {
@@ -314,11 +320,11 @@ router.patch("/:id", requireAuth, validateTournamentId, async (req, res) => {
       },
     });
 
-    // Broadcast real-time update to all WebSocket clients.
+    tournamentsUpdatedTotal.inc();
+
     broadcastTournamentUpdate(updatedTournament);
 
-    // Send email notifications to all tournament members (non-blocking).
-    // Runs detached so it never delays the HTTP response.
+    // Send email notifications to tournament members (non-blocking)
     if (Object.keys(changes).length > 0) {
       prisma.tournamentMember
         .findMany({
@@ -383,6 +389,7 @@ router.delete("/:id", requireAuth, validateTournamentId, async (req, res) => {
       }),
     ]);
 
+    tournamentsDeletedTotal.inc();
     return res.status(204).send();
   } catch (err) {
     console.error(err);

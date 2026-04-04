@@ -1,8 +1,8 @@
 import { createServer } from "http";
 import express from "express";
 import cors from "cors";
-import client from "prom-client"; // 1. Import the client
 
+import { register, metricsMiddleware } from "./metrics.js";
 import authRoutes from "./routes/authRoutes.js";
 import UserRoutes from "./routes/UserRoutes.js";
 import tournamentRoutes from "./routes/tournamentRoutes.js";
@@ -11,20 +11,6 @@ import tournamentMemberRoutes from "./routes/tournamentMemberRoutes.js";
 import { initWebSocketServer } from "./websocket.js";
 
 const app = express();
-
-// 2. Initialize Prometheus Metrics
-const register = new client.Registry();
-client.collectDefaultMetrics({ register });
-
-// 3. ADD 'export' SO OTHER FILES CAN USE THIS
-export const loginCounter = new client.Counter({
-  name: 'api_login_success_total',
-  help: 'Total number of successful logins'
-});
-
-// Note: You don't actually need register.registerMetric(loginCounter)
-// if you are using the global registry, but keeping it won't hurt.
-register.registerMetric(loginCounter);
 
 app.use(cors({
   origin: [
@@ -39,9 +25,11 @@ app.use(cors({
 
 app.use(express.json());
 
-// 4. THE METRICS ENDPOINT
-// This is where Fly.io (Prometheus) will "scrape" your data
-app.get("/metrics", async (req, res) => {
+// Metrics middleware — records duration, count, and in-flight for every request
+app.use(metricsMiddleware);
+
+// Prometheus scrape endpoint
+app.get("/metrics", async (_req, res) => {
   res.set("Content-Type", register.contentType);
   res.end(await register.metrics());
 });
@@ -54,7 +42,7 @@ app.use("/api/matches", matchRoutes);
 
 const PORT = Number(process.env.PORT) || 3000;
 
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.json({
     message: "Tournament Tracker API is LIVE in Toronto!",
     // This line detects if it's inside K8s or just Docker/Local
@@ -64,8 +52,8 @@ app.get("/", (req, res) => {
   });
 });
 
-// 5. Create an HTTP server from the Express app, then attach the WebSocket
-//    server to the same port so both HTTP and WS traffic share one port.
+// Create an HTTP server from the Express app, then attach the WebSocket
+// server to the same port so both HTTP and WS traffic share one port.
 const server = createServer(app);
 initWebSocketServer(server);
 
