@@ -1,8 +1,11 @@
 # Team Information
 
 Alex McRae (1004926011): alex.mcrae@mail.utoronto.ca
+
 Rahul Jampala (1012502891): rahul.jampala@mail.utoronto.ca
+
 Nathan Le: natedw.le@mail.utoronto.ca
+
 Harry Le: harry.le@mail.utoronto.ca
 
 # Motivation
