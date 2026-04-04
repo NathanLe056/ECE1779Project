@@ -11,6 +11,10 @@ primary_region = "yyz"
   auto_start_machines = true
   min_machines_running = 0
 
+[mounts]
+  source = "grafana_data"
+  destination = "/var/lib/grafana"
+
 [env]
   GF_SERVER_ROOT_URL = "https://tournament-grafana-n.fly.dev"
   GF_AUTH_ANONYMOUS_ENABLED = "false"

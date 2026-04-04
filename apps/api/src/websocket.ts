@@ -32,7 +32,7 @@ export function initWebSocketServer(server: Server): void {
     }, 30_000);
 
     ws.on("pong", () => {
-      // client is still alive — nothing extra needed
+      // client is still alive
     });
 
     ws.on("close", () => {

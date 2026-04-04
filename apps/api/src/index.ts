@@ -15,9 +15,7 @@ const app = express();
 app.use(cors({
   origin: [
     "http://localhost:5172",
-    // This Regex allows any subdomain ending in .fly.dev
     /^https:\/\/.*\.fly\.dev$/,
-    // Regex for Minikube ports
     /^http:\/\/127\.0\.0\.1(:\d+)?$/
   ],
   credentials: true
@@ -25,7 +23,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// Metrics middleware — records duration, count, and in-flight for every request
 app.use(metricsMiddleware);
 
 // Prometheus scrape endpoint
@@ -45,15 +42,12 @@ const PORT = Number(process.env.PORT) || 3000;
 app.get("/", (_req, res) => {
   res.json({
     message: "Tournament Tracker API is LIVE in Toronto!",
-    // This line detects if it's inside K8s or just Docker/Local
     platform: process.env.KUBERNETES_SERVICE_HOST ? "Kubernetes" : "Docker/Local",
     status: "Healthy",
     time: new Date().toISOString()
   });
 });
 
-// Create an HTTP server from the Express app, then attach the WebSocket
-// server to the same port so both HTTP and WS traffic share one port.
 const server = createServer(app);
 initWebSocketServer(server);
 
