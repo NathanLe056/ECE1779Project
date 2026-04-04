@@ -510,3 +510,12 @@ Some mistakes AI generated were caught by the team, for example, there was an is
   - API endpoints.
   - Prisma ORM setup.
   - Authentication/Authorization.
+- Docker Compose setup.
+
+# Lessons Learned and Concluding Remarks
+
+This project was a great learning experience for how real industry apps are developed in a small team. It was evident early on that even though having more people means more work can be done, it also means a lot more planning and collaboration.
+
+Creating clear boundaries between tasks for team-members is difficult, and often one person’s task is blocked until another’s is properly implemented. This is often tough to deal with when everyone has their own schedules and may have other higher priorities at the moment.
+
+It is also evident that a lot of work needs to be put in to even make a simple application functional and complexity in implementation of features can continue to multiply as the project goes on because decisions made a few weeks ago can have large consequences on how certain features can be implemented. Without a lot of time for iteration, compromises need to be made in terms of the final implementation, so that by the final deliverable, it is in a working state.
