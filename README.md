@@ -80,9 +80,21 @@ Editing tournament results only becomes available once the tournament is filled 
 
 In order to deploy the Tournament Tracker application, both locally or on fly.io, there are a few steps to make sure the deployment is consistent from everyone with the repository. The complete steps to deploy the app are given in this section.
 
+## Important File Edit
+
+There is an important file in the repository that may cause the front-end web app to sometimes crash immediately upon creation.
+
+```
+apps/web/start-ngninx.sh
+```
+
+For a reason not fully understood, the way to fix this issue is to ensure the file's end of line sequence is set to LF insetad of CRLF. Here is where to check if it is correctly set in Visual Studio Code.
+
+![End of line sequence for start-nginx.sh](assets/line-ending-critical.png)
+
 ## Important files not in Repository
 
-There are 3 main files that are not in the repository that are needed to deploy the app both locally and on fly.io. Please refer to the email for these files.
+There are 3 main files that are not in the repository that are needed to deploy the app both locally and on fly.io. All of these files were sent as an email to TA.
 
 1. .env in the root directory. The file location should end up being:
 
