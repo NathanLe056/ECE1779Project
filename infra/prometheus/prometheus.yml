@@ -3,7 +3,7 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: "tournament-api"
+  - job_name: "tournament-api-n"
     scheme: https
     static_configs:
       - targets: ["tournament-api-n.fly.dev"]
