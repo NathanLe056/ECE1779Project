@@ -1,9 +1,6 @@
-const configuredApiBase = import.meta.env.VITE_API_URL || "http://localhost:3000/api/";
-const isFlyHost = window.location.hostname.endsWith(".fly.dev");
-
 export const API_BASE = import.meta.env.DEV
-  ? configuredApiBase
-  : (isFlyHost ? configuredApiBase : "/api/");
+  ? (import.meta.env.VITE_API_URL || "http://localhost:3000/api/")
+  : (import.meta.env.VITE_API_URL || "/api/");
 
 export async function apiFetch<T>(
   endpoint: string,

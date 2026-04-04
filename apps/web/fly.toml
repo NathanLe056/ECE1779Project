@@ -8,9 +8,11 @@ primary_region = 'yyz'
 
 [build]
   dockerfile = 'Dockerfile'
+  [build.args]
+    VITE_API_URL = 'https://tournament-api-n.fly.dev/api/'
 
 [env]
-  API_UPSTREAM = 'tournament-api-n.fly.dev'
+  API_UPSTREAM = 'tournament-api-n.internal:3000'
 
 [http_service]
   internal_port = 80
