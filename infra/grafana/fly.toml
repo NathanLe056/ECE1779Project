@@ -1,0 +1,21 @@
+app = "tournament-grafana-n"
+primary_region = "yyz"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[env]
+  GF_SERVER_ROOT_URL = "https://tournament-grafana-n.fly.dev"
+  GF_AUTH_ANONYMOUS_ENABLED = "false"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

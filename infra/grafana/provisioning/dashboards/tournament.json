@@ -1,0 +1,282 @@
+{
+  "title": "Tournament Tracker",
+  "uid": "tournament-tracker",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Requests / sec",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total[1m])",
+          "legendFormat": "{{method}} {{route}} {{status_code}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "p95 Request Latency (s)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95 {{route}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Error Rate (4xx + 5xx / sec)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{status_code=~\"[45]..\"}[1m])",
+          "legendFormat": "{{status_code}} {{route}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "In-Flight Requests",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "expr": "http_requests_in_flight",
+          "legendFormat": "in-flight",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Active WebSocket Connections",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "expr": "ws_connections_active",
+          "legendFormat": "active",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "WebSocket Connections",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "ws_connections_active",
+          "legendFormat": "active",
+          "datasource": "Prometheus"
+        },
+        {
+          "expr": "rate(ws_connections_total[5m])",
+          "legendFormat": "new / sec",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "WebSocket Broadcasts / sec",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(ws_broadcasts_total[1m])",
+          "legendFormat": "broadcasts",
+          "datasource": "Prometheus"
+        },
+        {
+          "expr": "rate(ws_messages_sent_total[1m])",
+          "legendFormat": "messages sent",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Logins / min",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(auth_login_total[1m]) * 60",
+          "legendFormat": "{{result}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Signups / min",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(auth_signup_total[1m]) * 60",
+          "legendFormat": "{{result}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Tournaments (total)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 32, "w": 6, "h": 6 },
+      "targets": [
+        {
+          "expr": "tournaments_created_total",
+          "legendFormat": "created",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Tournament Updates (total)",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 32, "w": 6, "h": 6 },
+      "targets": [
+        {
+          "expr": "tournaments_updated_total",
+          "legendFormat": "updated",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Tournament Deletions (total)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 32, "w": 6, "h": 6 },
+      "targets": [
+        {
+          "expr": "tournaments_deleted_total",
+          "legendFormat": "deleted",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Members Joined / Left (total)",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 32, "w": 6, "h": 6 },
+      "targets": [
+        {
+          "expr": "tournament_members_joined_total",
+          "legendFormat": "joined",
+          "datasource": "Prometheus"
+        },
+        {
+          "expr": "tournament_members_removed_total",
+          "legendFormat": "removed",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Matches Created / Updated (total)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 38, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "matches_created_total",
+          "legendFormat": "created",
+          "datasource": "Prometheus"
+        },
+        {
+          "expr": "matches_updated_total",
+          "legendFormat": "updated",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Emails Sent",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 38, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "rate(emails_sent_total[5m]) * 60",
+          "legendFormat": "{{result}} / min",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Node.js Heap Used (MB)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 44, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "nodejs_heap_size_used_bytes / 1024 / 1024",
+          "legendFormat": "heap used",
+          "datasource": "Prometheus"
+        },
+        {
+          "expr": "nodejs_heap_size_total_bytes / 1024 / 1024",
+          "legendFormat": "heap total",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Node.js Event Loop Lag (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 44, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "nodejs_eventloop_lag_seconds * 1000",
+          "legendFormat": "lag ms",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "DB Query p95 Latency (s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 52, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(db_query_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95 {{operation}} {{model}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "title": "DB Errors / sec",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 52, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(db_errors_total[1m])",
+          "legendFormat": "{{operation}} {{model}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    }
+  ]
+}
