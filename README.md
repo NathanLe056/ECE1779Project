@@ -50,7 +50,7 @@ These modules should also be containerized so that they conform with the general
 
 The front-end is implemented as a VITE React app which allows for a simple component-based UI that allows for rapid development that can easily handle user input. It also allows for dynamic rendering for items such as tournament details and all match results.
 
-The front-end handles creating and updating tournaments using a REST API with asynchronous requests to the back-end. Real time updates are facilitated using Websockets.
+The front-end handles creating and updating tournaments using a REST API with asynchronous requests to the back-end. Real-time updates are facilitated using WebSockets.
 
 User authentication is handled through JWT tokens in API requests to ensure users are only allowed to modify tournaments they created.
 
@@ -60,7 +60,7 @@ The back-end is implemented as an express.js application which works well for it
 
 It handles the bracket/match creation, match progression, and validation. It also communicates with a PostgreSQL database to store and retrieve all of the persistent data.
 
-Websockets are used to broadcast tournament updates to anybody on the tournament’s details page on the front-end.
+WebSockets are used to broadcast tournament updates to anybody on the tournament's details page on the front-end.
 
 ## Database Layer
 
@@ -71,17 +71,17 @@ The database layer runs a PostgreSQL relational database to store persistent dat
 - Participants and rankings
 - Match results and progression states
 
-The database is implemented using the Prisma ORM in the back-end. This allows the back-end to relate database entities to typescript objects making querying and editing entities much easier. Updates to the database are represented as migrations to have a step-by-step update path for older versions of the database.
+The database is implemented using the Prisma ORM in the back-end. This allows the back-end to relate database entities to TypeScript objects, making querying and editing entities much easier. Updates to the database are represented as migrations to have a step-by-step update path for older versions of the database.
 
 ## Containerization
 
 Docker is the main technology used to containerize the front-end, back-end and database modules in the application. Docker is the industry-standard containerization technology and allows for simple dependency management, and consistency among different deployments.
 
-Docker Desktop with Docker compose is used for local development to create a multi-container system all at once that are able to communicate with each other.
+Docker Desktop with Docker Compose is used for local development to create a multi-container system all at once that is able to communicate with each other.
 
 ## Orchestration
 
-Kubernetes run through Minikube is used as the local orchestration platform for the containerized application. This is used locally to simulate how it would work when deploying to Fly.io which handles much of the orchestration logic automatically.
+Kubernetes run through Minikube is used as the local orchestration platform for the containerized application. This is used locally to simulate how it would work when deploying to Fly.io, which handles much of the orchestration logic automatically.
 
 Kubernetes is useful in managing the containerized application since it can:
 
@@ -110,20 +110,87 @@ For Continuous Integration, whenever a pull request is made in GitHub a few chec
 - Both the front-end and back-end apps can be compiled.
 - Both the front-end and back-end Docker containers can be created.
 
-For Continuous Delivery, the one automation made was to redeploy the front-end and back-end apps on fly.io every time a commit is pushed to main.
+For Continuous Delivery, the one automation made was to redeploy the front-end and back-end apps on Fly.io every time a commit is pushed to main.
 
 ## Real-Time Communication
 
 WebSockets are implemented to maintain persistent connections between clients and the server, enabling automatic updates and synchronization for tournaments when users are on a tournament’s details page.
 
-##
+## Monitoring and Observability
 
-Monitoring and Observability
+The monitoring stack is built using Prometheus and Grafana to provide real-time insights into the system's health. Prometheus acts as the data aggregator, periodically scraping metrics from the back-end and front-end services deployed on Fly.io. These metrics include CPU utilization, memory consumption, HTTP request latency, and other metrics specifically related to bracket management.
 
-Monitoring is done through the use of Prometheus and Grafana.
+Once collected, Prometheus pushes this data to a managed Grafana instance. Grafana serves as the visualization layer, transforming raw time-series data into intuitive dashboards. This allows the team to monitor traffic spikes, identify performance bottlenecks, and ensure the high availability of the distributed tournament system.
 
-- Scrapes data and sends to prometheus
-- Prometheus sends to grafana to display to user.
+# Features
+
+This section outlines the core functional capabilities and the advanced distributed system features that enhance the scalability and reliability of the tournament management platform.
+
+## Core Features
+
+### 1. Bracket Creation and Configuration
+
+One of the most important features that this project implements is the creation of tournament brackets. The front-end web application expedites this process. Once the data is inputted, the back-end system dynamically generates bracket structures.
+
+### 2. Participant Management
+
+A comprehensive management suite allows users to add, remove, and edit participant profiles. The system supports manual seeding and automatic placement based on assigned rankings to ensure competitive balance within the bracket.
+
+### 3. Data Validation
+
+To maintain the integrity of the tournament state, the back-end enforces strict validation rules. This includes preventing duplicate participant rankings, ensuring input ranges are within logical bounds, and verifying tournament constraints before initialization.
+
+### 4. Match Result Management
+
+Users can input scores and match outcomes directly through the web UI. The system automatically calculates winners and advances them to the next stage of the bracket, maintaining a consistent state across the entire database.
+
+### 5. Persistent Storage
+
+All tournament data is persisted in a PostgreSQL database. This ensures that tournament progress is reliable across user sessions and can be recovered in the event of a system failure.
+
+### 6. Shareable Access
+
+The platform generates unique, persistent identifiers for every tournament. These allow creators to share their brackets with viewers, providing read-only access without requiring a full authentication handshake. Users share tournaments through the URL.
+
+### 7. Export Functionality
+
+To support external analysis and record-keeping, tournament data, including match history and final standings, can be exported in standardized JSON or CSV formats.
+
+## Advanced Features
+
+### 1. Real-Time Updates (WebSockets)
+
+By utilizing WebSockets, the system broadcasts match updates and score changes instantly to all connected clients. This eliminates the need for manual refreshes and ensures that all users see the same tournament state simultaneously.
+
+### 2. Authentication and Authorization
+
+The system implements secure access controls using JWT tokens. This ensures that while anyone can view a public tournament, only the verified creator has the privileges required to modify participants or match results.
+
+### 3. Email Notifications
+
+An automated notification service alerts participants and organizers via email when events occur, such as the posting of a final match result or the declaration of a tournament winner.
+
+### 4. CI/CD Automation
+
+The deployment pipeline is fully automated through a CI/CD workflow. This ensures that every code change is automatically tested and deployed to the cloud environment, facilitating rapid, reliable iterations.
+
+### 5. Monitoring and Observability
+
+The integration of Prometheus and Grafana allows for proactive system management. By tracking performance metrics, the team can optimize resource allocation and debug issues in the production environment before they impact the user experience.
+
+### How Features Fulfill Objectives and Course Requirements
+
+The implemented features directly align with the core functional goals and the specific technical requirements of the course. The core feature set ensures the system operates as a comprehensive tournament management platform, effectively fulfilling user needs for bracket creation, participant management, and sharing of results. Furthermore, the integration of advanced features demonstrates distributed system concepts, specifically regarding real-time communication via WebSockets and multi-instance synchronization across a global network.
+
+The project’s architecture leverages Docker and Kubernetes to satisfy all requirements related to containerization and orchestration, while the final deployment on Fly.io demonstrates proficiency in cloud-native application hosting. Modern DevOps practices are reflected through the implementation of a robust CI/CD pipeline, and the use of Prometheus and Grafana ensures full-stack observability and system reliability.
+
+# Deployment Information
+
+Fly.io Front-end: https://tournament-web-n.fly.dev/
+
+Fly.io Back-end: https://tournament-api-n.fly.dev/
+
+Grafana: https://tournament-grafana-n.fly.dev/d/tournament-tracker/tournament-tracker?orgId=1&from=now-30m&to=now&timezone=browser&refresh=15s
 
 # User Guide
 
@@ -170,7 +237,7 @@ There are a few options to get to the details page of any tournament
 
 ![Tournament details page](assets/tournament-details-page.png)
 
-From the tournament details page, the url can be shared with others so that they may have a direct link to this specific tournament's details.
+From the tournament details page, the URL can be shared with others so that they may have a direct link to this specific tournament's details.
 
 ## Joining a Tournament as a Player
 
@@ -198,8 +265,8 @@ Editing tournament results only becomes available once the tournament is filled 
 
 ![Save matchup results](assets/results-save.png)
 
-5. Do this for all matchups in the quarterfinal, semifinals, then finals.
-6. Once completed a tournament winner should be shown in the bottom of the screen.
+6. Do this for all matchups in the quarterfinals, semifinals, then finals.
+7. Once completed, a tournament winner should be shown at the bottom of the screen.
 
 ![Completed Tournament](assets/tournament-final.png)
 
@@ -235,7 +302,7 @@ ECE1779Project/.env
 ECE1779Project/apps/web/.env
 ```
 
-3. secrets.yaml in kubernetes directory. The file location should end up being:
+3. secrets.yaml in the Kubernetes directory. The file location should end up being:
 
 ```
 ECE1779Project/k8s/secrets.yaml
@@ -274,7 +341,7 @@ npm install
 1. Ensure .env is in root directory of the repository.
 2. Ensure the .env in apps/web/ has the VITE_API_URL commented out.
 3. Ensure Docker Desktop app is on and fully loaded.
-4. From the root directory compose the app containers run Docker compose.
+4. From the root directory, compose the app containers and run Docker Compose.
 
 ```
 docker compose up --build -d
@@ -313,7 +380,7 @@ cd apps/api
 docker build -t tournament-api-k8s:1.0 .
 ```
 
-5. Load image in minikube docker daemon
+5. Load image in the Minikube Docker daemon
 
 ```
 minikube image load tournament-api-k8s:1.0
@@ -331,7 +398,7 @@ cd ../web
 docker build -t tournament-web-k8s:1.0 .
 ```
 
-8. Load image in minikube docker daemon
+8. Load image in the Minikube Docker daemon
 
 ```
 minikube image load tournament-web-k8s:1.0
@@ -357,13 +424,13 @@ kubectl apply -f .
 kubectl get pods
 ```
 
-13. Get the url for the web service
+13. Get the URL for the web service
 
 ```
 minikube service web-service --url
 ```
 
-14. Enter frontend from the given url
+14. Enter the frontend from the given URL
 
 15. Once done with testing, ensure minikube is reset
 
@@ -481,7 +548,7 @@ AI was also used to help debug issues occurring during development. For example,
 
 Any code generated by AI was read through and critically analyzed to understand why it implemented a feature in a certain way. The app was also thoroughly tested to ensure there were no gaps in the implemented code. One thing that could have been added given more time were unit tests to ensure consistent output from business critical functions and components in the code. Most of the testing done was functional rather than unit and so that is something that may be further expanded in future projects.
 
-Some mistakes AI generated were caught by the team, for example, there was an issue with deploying on fly.io initially because it would always try to run API requests through the local version of the back-end application instead of the fly.io deployed back-end. AI recommendations suggested including the api url as a fly secret so that it may be seen when compiled. This did not work because the front-end docker container would compile the React app and set the API URL at compile time and not look for the fly secret. To fix this, the API url was added as a .env specific to the front-end that could change for various deployments. This example is shown in further detail in the ai-session.md.
+Some mistakes AI generated were caught by the team. For example, there was an issue with deploying on Fly.io initially because it would always try to run API requests through the local version of the back-end application instead of the Fly.io deployed back-end. AI recommendations suggested including the API URL as a Fly.io secret so that it may be seen when compiled. This did not work because the front-end Docker container would compile the React app and set the API URL at compile time and not look for the Fly.io secret. To fix this, the API URL was added as a .env specific to the front-end that could change for various deployments. This example is shown in further detail in the ai-session.md.
 
 # Individual Contributions
 
@@ -497,8 +564,9 @@ Some mistakes AI generated were caught by the team, for example, there was an is
   - Controllers.
 - CI/CD pipelines.
 - Deployment consolidation for Docker Desktop, Kubernetes, and Fly.io.
+- Development and user guides.
 
-## Rahul
+## Rahul Jampala
 
 - Front-end feature implementation.
   - UI design.
@@ -512,6 +580,30 @@ Some mistakes AI generated were caught by the team, for example, there was an is
   - Authentication/Authorization.
 - Docker Compose setup.
 
+## Harry Le
+
+- Websocket Implementation
+  - Full implementation of live updates on website for all users viewing the website
+- Prometheus and Grafana Implementation
+  - Metrics and scraping on data off backend and APIs
+  - Deployment and development of the dashboards
+  - Connecting Prometheus and Grafana into the fly.io setup
+- Email notifications
+- Fly.io
+- App Deployment
+- Debugging and Fixes
+
+## Nathan Le
+
+- Back-End Infrastructure and Logic
+  - Initial implementation for add, delete, and edit brackets
+- Container Orchestration and Deployment
+  - Development of Kubernetes configuration and YAML manifests.
+  - Consolidation of deployment workflows for Docker Desktop, Kubernetes, and Fly.io.
+  - Management of front-end, back-end, and database Fly.io machines.
+- DevOps and Documentation
+- Initial creation of developer instructions and deployment guides.
+
 # Lessons Learned and Concluding Remarks
 
 This project was a great learning experience for how real industry apps are developed in a small team. It was evident early on that even though having more people means more work can be done, it also means a lot more planning and collaboration.
@@ -519,3 +611,7 @@ This project was a great learning experience for how real industry apps are deve
 Creating clear boundaries between tasks for team-members is difficult, and often one person’s task is blocked until another’s is properly implemented. This is often tough to deal with when everyone has their own schedules and may have other higher priorities at the moment.
 
 It is also evident that a lot of work needs to be put in to even make a simple application functional and complexity in implementation of features can continue to multiply as the project goes on because decisions made a few weeks ago can have large consequences on how certain features can be implemented. Without a lot of time for iteration, compromises need to be made in terms of the final implementation, so that by the final deliverable, it is in a working state.
+
+## Video Demo
+
+https://www.youtube.com/watch?v=YqcrPF4ROi4
