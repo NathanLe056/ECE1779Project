@@ -46,22 +46,113 @@ function TournamentDetail({
   const { lastMessage } = useWebSocketContext();
 
   useEffect(() => {
-    if (!lastMessage || !tournament) return;
+    if (!lastMessage) return;
+
+    // Handle deletion first — works even if tournament state is still loading
+    if (lastMessage.type === "TOURNAMENT_DELETED") {
+      const { id: deletedId } = lastMessage.payload as { id: number };
+      const currentId = tournament?.id ?? (id ? Number(id) : null);
+      if (currentId !== null && deletedId === currentId) {
+        navigate("/");
+        return;
+      }
+    }
+
+    if (!tournament) return;
+    const tid = tournament.id;
 
     if (lastMessage.type === "TOURNAMENT_UPDATED") {
       const updated = lastMessage.payload;
-      // Only update if this message is about the tournament we're viewing
-      if (updated && updated.id === tournament.id) {
-        // Merge top-level scalar fields (name, status, description, etc.)
-        // but preserve deeply-loaded relations (members, matches) that the
-        // PATCH response doesn't include in full.
+      if (updated && updated.id === tid) {
         setTournament((prev) => {
           if (!prev) return prev;
           return { ...prev, ...updated };
         });
       }
     }
-  }, [lastMessage, tournament?.id]);
+
+    if (lastMessage.type === "TOURNAMENT_MEMBER_JOINED") {
+      const { tournamentId, member } = lastMessage.payload as {
+        tournamentId: number;
+        member: any;
+      };
+      if (tournamentId === tid) {
+        setTournament((prev) => {
+          if (!prev) return prev;
+          // Avoid duplicates
+          const already = prev.members.some((m: any) => m.id === member.id);
+          if (already) return prev;
+          return { ...prev, members: [...prev.members, member] };
+        });
+      }
+    }
+
+    if (lastMessage.type === "TOURNAMENT_MEMBER_REMOVED") {
+      const { tournamentId, memberId } = lastMessage.payload as {
+        tournamentId: number;
+        memberId: number;
+      };
+      if (tournamentId === tid) {
+        setTournament((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            members: prev.members.filter((m: any) => m.id !== memberId),
+          };
+        });
+      }
+    }
+
+    if (lastMessage.type === "TOURNAMENT_MEMBER_UPDATED") {
+      const { tournamentId, member } = lastMessage.payload as {
+        tournamentId: number;
+        member: any;
+      };
+      if (tournamentId === tid) {
+        setTournament((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            members: prev.members.map((m: any) =>
+              m.id === member.id ? { ...m, ...member } : m
+            ),
+          };
+        });
+      }
+    }
+
+    if (lastMessage.type === "MATCH_UPDATED" || lastMessage.type === "BRACKET_GENERATED") {
+      const { tournamentId, matches } = lastMessage.payload as {
+        tournamentId: number;
+        matches: any[];
+      };
+      if (tournamentId === tid) {
+        setTournament((prev) => {
+          if (!prev) return prev;
+          return { ...prev, matches };
+        });
+      }
+    }
+  }, [lastMessage, tournament?.id, navigate]);
+
+  // ── Polling fallback: refresh every 5 s so updates always appear ──────────
+  useEffect(() => {
+    if (!id) return;
+    const tournamentId = parseInt(id);
+    if (isNaN(tournamentId)) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const fresh = await getTournament(tournamentId);
+        setTournament(fresh);
+      } catch {
+        // tournament may have been deleted — navigate home
+        navigate("/");
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [id, navigate]);
   // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {

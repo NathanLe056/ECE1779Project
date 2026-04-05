@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { TournamentWithDetails } from "../types/Tournament";
 import { apiFetch } from "../api/apiClient";
 import { updateMatch } from "../api/matchApi";
+import { useWebSocketContext } from "../context/WebSocketContext";
 
 interface TournamentTableProps {
   tournament: TournamentWithDetails;
@@ -46,6 +47,42 @@ function TournamentTable({ tournament, currentUserId }: TournamentTableProps) {
     currentUserId !== null &&
     currentUserId !== undefined &&
     currentUserId === tournament.created_by;
+
+  // ── WebSocket: apply live match/bracket updates sent by the server ────────
+  const { lastMessage } = useWebSocketContext();
+
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    if (
+      lastMessage.type === "MATCH_UPDATED" ||
+      lastMessage.type === "MATCH_DELETED" ||
+      lastMessage.type === "BRACKET_GENERATED"
+    ) {
+      const { tournamentId, matches } = lastMessage.payload as {
+        tournamentId: number;
+        matches: TournamentWithDetails["matches"];
+      };
+      if (tournamentId === tournament.id) {
+        setDisplayMatches(matches);
+        setEditableRows({});
+        setRowUiState({});
+      }
+    }
+  }, [lastMessage, tournament.id]);
+
+  // ── Polling fallback: re-fetch matches every 5 s ──────────────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      apiFetch<TournamentWithDetails["matches"]>(`matches/tournament/${tournament.id}`)
+        .then((fetched) => {
+          setDisplayMatches(fetched);
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [tournament.id]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const updateRowUiState = (key: string, updates: Partial<RowUiState>) => {
     setRowUiState((prev) => ({

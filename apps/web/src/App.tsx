@@ -28,6 +28,21 @@ function App() {
         prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
       );
     }
+
+    if (lastMessage.type === "TOURNAMENT_DELETED") {
+      const { id } = lastMessage.payload as { id: number };
+      setTournaments((prev) => prev.filter((t) => t.id !== id));
+    }
+
+    if (
+      lastMessage.type === "TOURNAMENT_MEMBER_JOINED" ||
+      lastMessage.type === "TOURNAMENT_MEMBER_REMOVED"
+    ) {
+      // Refresh member counts on the list
+      getTournaments()
+        .then((data) => setTournaments(data))
+        .catch(() => {});
+    }
   }, [lastMessage]);
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -70,6 +85,15 @@ function App() {
     };
 
     fetchTournaments();
+
+    // Polling fallback — refresh the tournaments list every 8 s
+    const interval = setInterval(() => {
+      getTournaments()
+        .then((data) => setTournaments(data))
+        .catch(() => {});
+    }, 8000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleLogin = (loggedInUser: User) => {

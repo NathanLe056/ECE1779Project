@@ -35,7 +35,7 @@ const WS_URL: string = import.meta.env.DEV
     : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
 
 const RECONNECT_DELAY_MS = 3_000;
-const PING_INTERVAL_MS = 25_000;
+const PING_INTERVAL_MS = 15_000;
 
 // ---------------------------------------------------------------------------
 // Context

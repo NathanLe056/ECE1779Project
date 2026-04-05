@@ -9,8 +9,14 @@ import {
   validateTournamentId,
 } from "../middleware/tournamenttable.js";
 import { generateBracketMatches } from "../utils/bracketGenerator.js";
-import { broadcastTournamentUpdate } from "../websocket.js";
-import { sendTournamentUpdateEmails } from "../emailService.js";
+import {
+  broadcastTournamentUpdate,
+  broadcastTournamentDeleted,
+} from "../websocket.js";
+import {
+  sendTournamentUpdateEmails,
+  sendTournamentDeletedEmails,
+} from "../emailService.js";
 import {
   tournamentsCreatedTotal,
   tournamentsUpdatedTotal,
@@ -377,6 +383,12 @@ router.delete("/:id", requireAuth, validateTournamentId, async (req, res) => {
       });
     }
 
+    // Fetch members BEFORE the transaction wipes them so we can notify them
+    const membersBeforeDeletion = await prisma.tournamentMember.findMany({
+      where: { tournament_id: id },
+      include: { user: { select: { email: true, username: true } } },
+    });
+
     await prisma.$transaction([
       prisma.match.deleteMany({
         where: { tournament_id: id },
@@ -390,6 +402,24 @@ router.delete("/:id", requireAuth, validateTournamentId, async (req, res) => {
     ]);
 
     tournamentsDeletedTotal.inc();
+
+    // Broadcast deletion so all connected clients remove it from their lists
+    broadcastTournamentDeleted(id);
+
+    // Email all former members (non-blocking)
+    const recipients = membersBeforeDeletion.map((m: { user: { email: string; username: string } }) => ({
+      email: m.user.email,
+      username: m.user.username,
+    }));
+    sendTournamentDeletedEmails({
+      tournamentId: id,
+      tournamentName: existingTournament.name,
+      deletedByUsername: req.user.username,
+      recipients,
+    }).catch((err) =>
+      console.error("[Email] Failed to send tournament deleted emails:", err)
+    );
+
     return res.status(204).send();
   } catch (err) {
     console.error(err);

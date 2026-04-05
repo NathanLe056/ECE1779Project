@@ -3,6 +3,15 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { generateBracketMatches } from "../utils/bracketGenerator.js";
 import { matchesCreatedTotal, matchesUpdatedTotal } from "../metrics.js";
+import {
+  broadcastMatchUpdated,
+  broadcastMatchDeleted,
+  broadcastBracketGenerated,
+} from "../websocket.js";
+import {
+  sendMatchResultEmails,
+  sendBracketGeneratedEmails,
+} from "../emailService.js";
 
 const router = Router();
 
@@ -210,6 +219,32 @@ router.post("/generate-bracket/:tournament_id", requireAuth, async (req, res) =>
 
     const result = await generateBracketMatches(tournament_id);
     matchesCreatedTotal.inc();
+
+    // Broadcast so all tabs refresh their bracket view
+    const allMatches = Array.isArray(result) ? result : [];
+    broadcastBracketGenerated(tournament_id, allMatches);
+
+    // Email all members (non-blocking)
+    prisma.tournamentMember
+      .findMany({
+        where: { tournament_id },
+        include: { user: { select: { email: true, username: true } } },
+      })
+      .then((members: Array<{ user: { email: string; username: string } }>) => {
+        return sendBracketGeneratedEmails({
+          tournamentId: tournament_id,
+          tournamentName: tournament.name,
+          generatedByUsername: req.user!.username,
+          recipients: members.map((m: { user: { email: string; username: string } }) => ({
+            email: m.user.email,
+            username: m.user.username,
+          })),
+        });
+      })
+      .catch((err: unknown) =>
+        console.error("[Email] Failed to send bracket generated emails:", err)
+      );
+
     return res.status(201).json(result);
   } catch (error: any) {
     console.error("Error generating bracket:", error);
@@ -402,6 +437,41 @@ router.patch("/:id", requireAuth, async (req, res) => {
     });
 
     matchesUpdatedTotal.inc();
+
+    // Broadcast updated matches to all connected clients
+    broadcastMatchUpdated(updatedMatch.tournament_id, refreshedMatches);
+
+    // Email members when a winner is recorded (non-blocking)
+    if (updatedMatch.winner_id !== null && updatedMatch.match_status === "completed") {
+      const winnerId = updatedMatch.winner_id;
+      prisma.tournamentMember
+        .findMany({
+          where: { tournament_id: updatedMatch.tournament_id },
+          include: { user: { select: { email: true, username: true, id: true } } },
+        })
+        .then(async (members: Array<{ user: { email: string; username: string; id: number } }>) => {
+          const winnerUser = await prisma.user.findUnique({
+            where: { id: winnerId },
+            select: { username: true },
+          });
+          if (!winnerUser) return;
+          return sendMatchResultEmails({
+            tournamentId: updatedMatch.tournament_id,
+            tournamentName: existingMatch.tournament.name,
+            roundNumber: updatedMatch.round_number,
+            matchOrder: updatedMatch.match_order,
+            winnerUsername: winnerUser.username,
+            recipients: members.map((m: { user: { email: string; username: string; id: number } }) => ({
+              email: m.user.email,
+              username: m.user.username,
+            })),
+          });
+        })
+        .catch((err: unknown) =>
+          console.error("[Email] Failed to send match result emails:", err)
+        );
+    }
+
     return res.json({
       message: "Match updated successfully",
       match: updatedMatch,
@@ -438,6 +508,13 @@ router.delete("/:id", requireAuth, async (req, res) => {
     }
 
     await prisma.match.delete({ where: { id } });
+
+    // Fetch remaining matches and broadcast so all clients refresh their bracket
+    const remainingMatches = await prisma.match.findMany({
+      where: { tournament_id: existingMatch.tournament_id },
+      orderBy: [{ round_number: "asc" }, { match_order: "asc" }],
+    });
+    broadcastMatchDeleted(existingMatch.tournament_id, remainingMatches);
 
     return res.status(204).send();
   } catch (error) {

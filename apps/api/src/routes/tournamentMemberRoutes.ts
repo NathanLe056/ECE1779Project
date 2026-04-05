@@ -11,6 +11,15 @@ import {
   validateTournamentCapacity,
 } from "../middleware/tournamentmembertable.js";
 import { tournamentMembersJoinedTotal, tournamentMembersRemovedTotal } from "../metrics.js";
+import {
+  broadcastMemberJoined,
+  broadcastMemberUpdated,
+  broadcastMemberRemoved,
+} from "../websocket.js";
+import {
+  sendMemberJoinedEmails,
+  sendMemberRemovedEmail,
+} from "../emailService.js";
 
 const router = Router();
 
@@ -55,6 +64,12 @@ router.post(
         });
       }
 
+      // Snapshot existing members before insert so we know who to notify
+      const existingMembersSnapshot = await prisma.tournamentMember.findMany({
+        where: { tournament_id },
+        include: { user: { select: { email: true, username: true } } },
+      });
+
       const member = await prisma.tournamentMember.create({
         data: {
           tournament_id,
@@ -81,6 +96,24 @@ router.post(
       });
 
       tournamentMembersJoinedTotal.inc();
+
+      // Broadcast so all connected clients see the updated member list
+      broadcastMemberJoined(tournament_id, member);
+
+      // Send emails (non-blocking)
+      sendMemberJoinedEmails({
+        tournamentId: tournament_id,
+        tournamentName: tournament.name,
+        newMemberUsername: member.user.username,
+        newMemberEmail: member.user.email,
+        existingMembers: existingMembersSnapshot.map((m: { user: { email: string; username: string } }) => ({
+          email: m.user.email,
+          username: m.user.username,
+        })),
+      }).catch((err) =>
+        console.error("[Email] Failed to send member joined emails:", err)
+      );
+
       return res.status(201).json(member);
     } catch (err) {
       console.error(err);
@@ -89,7 +122,7 @@ router.post(
   }
 );
 
-// GET all tournament members
+// get all tournament members
 router.get("/", async (_req, res) => {
   try {
     const members = await prisma.tournamentMember.findMany({
@@ -119,7 +152,7 @@ router.get("/", async (_req, res) => {
   }
 });
 
-// GET tournament member by id
+// get tournament member by id
 router.get("/:id", validateTournamentMemberId, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -156,7 +189,7 @@ router.get("/:id", validateTournamentMemberId, async (req, res) => {
   }
 });
 
-// UPDATE tournament member
+// update tournament member
 router.patch("/:id", requireAuth, validateTournamentMemberId, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -230,6 +263,9 @@ router.patch("/:id", requireAuth, validateTournamentMemberId, async (req, res) =
       },
     });
 
+    // Broadcast so all connected clients update their member table live
+    broadcastMemberUpdated(updatedMember.tournament.id, updatedMember);
+
     return res.json(updatedMember);
   } catch (err) {
     console.error(err);
@@ -237,7 +273,7 @@ router.patch("/:id", requireAuth, validateTournamentMemberId, async (req, res) =
   }
 });
 
-// DELETE tournament member
+// delete tournament member
 router.delete("/:id", requireAuth, validateTournamentMemberId, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -246,6 +282,7 @@ router.delete("/:id", requireAuth, validateTournamentMemberId, async (req, res) 
       where: { id },
       include: {
         tournament: true,
+        user: { select: { email: true, username: true } },
       },
     });
 
@@ -267,6 +304,22 @@ router.delete("/:id", requireAuth, validateTournamentMemberId, async (req, res) 
     });
 
     tournamentMembersRemovedTotal.inc();
+
+    // Broadcast so all connected clients update their member lists
+    broadcastMemberRemoved(existingMember.tournament.id, id);
+
+    // Email the removed member (non-blocking)
+    const removedByUsername = req.user?.username ?? "Unknown";
+    sendMemberRemovedEmail({
+      tournamentId: existingMember.tournament.id,
+      tournamentName: existingMember.tournament.name,
+      removedMemberEmail: existingMember.user.email,
+      removedMemberUsername: existingMember.user.username,
+      removedByUsername,
+    }).catch((err) =>
+      console.error("[Email] Failed to send member removed email:", err)
+    );
+
     return res.status(204).send();
   } catch (err) {
     console.error(err);

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getTournaments, getMyTournaments } from "../api/tournamentApi";
 import { TournamentSummary } from "../types/Tournament";
 import { User } from "../types/User";
+import { useWebSocketContext } from "../context/WebSocketContext";
 
 interface HomeProps {
   user: User | null;
@@ -39,6 +40,53 @@ function Home({ user, onLogout, tournaments, onTournamentsChange }: HomeProps) {
         .finally(() => setMyTournamentsLoading(false));
     }
   }, [user]);
+
+  // ── WebSocket: keep "My Tournaments" in sync with live events ─────────────
+  const { lastMessage } = useWebSocketContext();
+
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    if (lastMessage.type === "TOURNAMENT_DELETED") {
+      const { id } = lastMessage.payload as { id: number };
+      setMyTournaments((prev) => prev.filter((t) => t.id !== id));
+    }
+
+    if (lastMessage.type === "TOURNAMENT_UPDATED") {
+      const updated = lastMessage.payload as TournamentSummary;
+      setMyTournaments((prev) =>
+        prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+      );
+    }
+
+    if (
+      lastMessage.type === "TOURNAMENT_MEMBER_JOINED" ||
+      lastMessage.type === "TOURNAMENT_MEMBER_REMOVED"
+    ) {
+      // Refresh "My Tournaments" so member counts and membership stay accurate
+      if (user) {
+        getMyTournaments()
+          .then(setMyTournaments)
+          .catch(() => {});
+      }
+    }
+  }, [lastMessage, user]);
+
+  // ── Polling fallback: refresh data every 8 s when WS is disconnected ──────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getTournaments()
+        .then((data) => onTournamentsChange(data))
+        .catch(() => {});
+      if (user) {
+        getMyTournaments()
+          .then(setMyTournaments)
+          .catch(() => {});
+      }
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [user, onTournamentsChange]);
+  // ──────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="app-shell">

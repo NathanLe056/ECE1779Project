@@ -24,12 +24,12 @@ export function initWebSocketServer(server: Server): void {
     wsConnectionsTotal.inc();
     wsConnectionsActive.inc();
 
-    // Keep the connection alive with pings every 30 s
+    // Keep the connection alive with pings every 15 s
     const pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.ping();
       }
-    }, 30_000);
+    }, 15_000);
 
     ws.on("pong", () => {
       // client is still alive
@@ -56,16 +56,12 @@ export function initWebSocketServer(server: Server): void {
 }
 
 /**
- * Broadcast a TOURNAMENT_UPDATED event to every connected client.
- * Safe to call before the server is initialized (no-op in that case).
+ * Internal helper — broadcast any typed message to all connected clients.
  */
-export function broadcastTournamentUpdate(tournament: object): void {
+function broadcast(type: string, payload: unknown): void {
   if (!wss) return;
 
-  const message = JSON.stringify({
-    type: "TOURNAMENT_UPDATED",
-    payload: tournament,
-  });
+  const message = JSON.stringify({ type, payload });
 
   let sent = 0;
   wss.clients.forEach((client: WebSocket) => {
@@ -78,5 +74,45 @@ export function broadcastTournamentUpdate(tournament: object): void {
   wsBroadcastsTotal.inc();
   wsMessagesSentTotal.inc(sent);
 
-  console.log(`[WS] Broadcasted TOURNAMENT_UPDATED to ${sent} client(s)`);
+  console.log(`[WS] Broadcasted ${type} to ${sent} client(s)`);
+}
+
+/** A tournament's scalar fields were updated (name, status, etc.). */
+export function broadcastTournamentUpdate(tournament: object): void {
+  broadcast("TOURNAMENT_UPDATED", tournament);
+}
+
+/** A tournament was deleted — clients viewing it should redirect away. */
+export function broadcastTournamentDeleted(tournamentId: number): void {
+  broadcast("TOURNAMENT_DELETED", { id: tournamentId });
+}
+
+/** A new member joined a tournament. */
+export function broadcastMemberJoined(tournamentId: number, member: object): void {
+  broadcast("TOURNAMENT_MEMBER_JOINED", { tournamentId, member });
+}
+
+/** A member's role or ranking was updated. */
+export function broadcastMemberUpdated(tournamentId: number, member: object): void {
+  broadcast("TOURNAMENT_MEMBER_UPDATED", { tournamentId, member });
+}
+
+/** A member was removed from a tournament. */
+export function broadcastMemberRemoved(tournamentId: number, memberId: number): void {
+  broadcast("TOURNAMENT_MEMBER_REMOVED", { tournamentId, memberId });
+}
+
+/** Match result / status updated — sends the full refreshed matches array. */
+export function broadcastMatchUpdated(tournamentId: number, matches: object[]): void {
+  broadcast("MATCH_UPDATED", { tournamentId, matches });
+}
+
+/** A single match row was deleted — sends the remaining matches array. */
+export function broadcastMatchDeleted(tournamentId: number, matches: object[]): void {
+  broadcast("MATCH_DELETED", { tournamentId, matches });
+}
+
+/** Bracket was generated for a tournament. */
+export function broadcastBracketGenerated(tournamentId: number, matches: object[]): void {
+  broadcast("BRACKET_GENERATED", { tournamentId, matches });
 }
